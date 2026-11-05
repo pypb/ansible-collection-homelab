@@ -34,7 +34,9 @@ jobs:
         with:
           python-version: "3.14"
       - run: pip install ansible-core
-      - run: ansible-test sanity --docker default
+      # Not --docker, because its container setup fails on the GitHub runner when
+      # remounting /sys/fs/cgroup.
+      - run: ansible-test sanity --venv --python 3.14 --requirements
         working-directory: ansible_collections/pypb/homelab
 
   molecule:
