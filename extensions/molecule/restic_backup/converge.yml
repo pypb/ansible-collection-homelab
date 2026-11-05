@@ -1,0 +1,5 @@
+---
+- name: Converge
+  ansible.builtin.import_playbook: pypb.homelab.restic_backup
+  vars:
+    restic_backup_hosts: targets

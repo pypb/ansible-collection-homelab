@@ -1,0 +1,116 @@
+---
+argument_specs:
+  main:
+    short_description: Install and configure restic and resticprofile for scheduled backups.
+    description:
+      - Installs restic and resticprofile, configures backup profiles, initializes
+        the repository and optionally schedules the profiles with systemd.
+    author:
+      - pypb
+    options:
+      restic_backup_enable:
+        type: bool
+        default: false
+        description: Master switch. The role does nothing unless this is true.
+      restic_backup_install:
+        type: bool
+        default: true
+        description: Install restic and resticprofile. Disable if they are already installed.
+      restic_backup_exclude:
+        type: list
+        elements: str
+        description: Base list of paths and patterns to exclude.
+      restic_backup_exclude_group:
+        type: list
+        elements: str
+        default: []
+        description: Additional excludes, intended for group variables.
+      restic_backup_exclude_host:
+        type: list
+        elements: str
+        default: []
+        description: Additional excludes, intended for host variables.
+      restic_backup_include:
+        type: list
+        elements: str
+        description: Base list of paths to back up.
+      restic_backup_include_group:
+        type: list
+        elements: str
+        default: []
+        description: Additional paths, intended for group variables.
+      restic_backup_include_host:
+        type: list
+        elements: str
+        default: []
+        description: Additional paths, intended for host variables.
+      restic_backup_config_dir:
+        type: path
+        default: /etc/resticprofile
+        description: Directory for the resticprofile configuration.
+      restic_backup_config_subdirs:
+        type: list
+        elements: str
+        description: Sub-directories to create in the configuration directory.
+      restic_backup_install_prefix:
+        type: path
+        default: /usr/local
+        description: Prefix to install the binaries under, in its C(bin) directory.
+      restic_backup_restic_version:
+        type: str
+        default: 0.19.1
+        description: restic version to install.
+      restic_backup_restic_url:
+        type: str
+        description: Download URL for restic. Defaults to the GitHub release for the host's architecture.
+      restic_backup_resticprofile_version:
+        type: str
+        default: 0.33.1
+        description: resticprofile version to install.
+      restic_backup_resticprofile_url:
+        type: str
+        description: Download URL for resticprofile. Defaults to the GitHub release for the host's architecture.
+      restic_backup_repo_url:
+        type: str
+        default: /var/tmp/restic_backup
+        description: Repository location, in any format restic accepts.
+      restic_backup_password:
+        type: str
+        no_log: true
+        description: Repository password. Required when the role is enabled.
+      restic_backup_env_list:
+        type: list
+        elements: str
+        no_log: true
+        description:
+          - Environment variables for resticprofile, as C(NAME=value) strings.
+          - The env file is left alone when this is undefined.
+      restic_backup_profiles:
+        type: dict
+        description: Base resticprofile profiles.
+      restic_backup_profiles_group:
+        type: dict
+        default: {}
+        description: Additional profiles, intended for group variables.
+      restic_backup_profiles_host:
+        type: dict
+        description: Additional profiles, intended for host variables.
+      restic_backup_schedule_enable:
+        type: bool
+        default: false
+        description: Schedule profiles if true, and remove existing schedules if false.
+      restic_backup_scheduler:
+        type: str
+        default: systemd
+        description: resticprofile scheduler. Repeat runs are only idempotent with C(systemd).
+      restic_backup_groups:
+        type: dict
+        description: Base resticprofile groups.
+      restic_backup_groups_group:
+        type: dict
+        default: {}
+        description: Additional groups, intended for group variables.
+      restic_backup_groups_host:
+        type: dict
+        default: {}
+        description: Additional groups, intended for host variables.

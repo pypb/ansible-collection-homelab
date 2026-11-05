@@ -1,0 +1,131 @@
+---
+- name: Verify backups
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Run a backup with the generated credentials
+      ansible.builtin.command:
+        argv: [resticprofile, --config, /etc/resticprofile/profiles.yaml, system.backup]
+      changed_when: false
+
+    - name: List snapshots
+      ansible.builtin.command:
+        argv: [resticprofile, --config, /etc/resticprofile/profiles.yaml, --quiet, system.snapshots, --json]
+      register: __molecule_snapshots
+      changed_when: false
+
+    - name: Check a snapshot exists
+      ansible.builtin.assert:
+        that:
+          - __molecule_snapshots['stdout'] | from_json | length > 0
+
+    - name: Read secret file details
+      ansible.builtin.stat:
+        path: "/etc/resticprofile/{{ item }}"
+      loop:
+        - password
+        - env
+        - profiles.yaml
+      register: __molecule_stat
+
+    - name: Check secret files are only accessible by root
+      ansible.builtin.assert:
+        that:
+          - item['stat']['mode'] == '0600'
+          - item['stat']['pw_name'] == 'root'
+        quiet: true
+      loop: "{{ __molecule_stat['results'] }}"
+      loop_control:
+        label: "{{ item['item'] }}"
+
+    - name: Find systemd timers
+      ansible.builtin.find:
+        paths: /etc/systemd/system
+        patterns: resticprofile-*.timer
+      register: __molecule_timers
+
+    - name: Check a timer has correct permissions
+      ansible.builtin.assert:
+        that:
+          - __molecule_timers['matched'] > 0
+          - __molecule_timers['files'] | map(attribute='mode') | unique == ['0644']
+
+    - name: Check the timer is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ __molecule_timers['files'][0]['path'] | basename }}"]
+      changed_when: false
+
+- name: Verify check mode
+  hosts: rest-server-host
+  gather_facts: false
+  tasks:
+    - name: Run converge in check mode
+      ansible.builtin.command:
+        argv:
+          - ansible-playbook
+          - --check
+          - --inventory
+          - "{{ inventory_file }}"
+          - "{{ playbook_dir }}/converge.yml"
+      register: __molecule_check
+      changed_when: false
+
+    - name: Check that check mode reported no changes
+      ansible.builtin.assert:
+        that:
+          - __molecule_check['stdout'] is not regex('(debian13|ubuntu2404|ubuntu2604) +:.*changed=[1-9]')
+
+- name: Verify that repository errors fail instead of triggering init
+  hosts: rest-server-host
+  gather_facts: false
+  tasks:
+    - name: Run converge with the wrong repository password
+      ansible.builtin.command:
+        argv:
+          - ansible-playbook
+          - --inventory
+          - "{{ inventory_file }}"
+          - --extra-vars
+          - restic_backup_password=wrong-repository-password
+          - "{{ playbook_dir }}/converge.yml"
+      register: __molecule_wrong_password
+      changed_when: false
+      failed_when: __molecule_wrong_password['rc'] == 0
+
+    - name: Check the failure came from the repository check
+      ansible.builtin.assert:
+        that:
+          - __molecule_wrong_password['stdout'] is search('TASK .*Init \| Check whether the repository exists')
+          - __molecule_wrong_password['stdout'] is not search('TASK .*Init \| Initialize repository')
+
+- name: Verify download URLs for each supported architecture
+  hosts: rest-server-host
+  gather_facts: false
+  vars:
+    __molecule_architectures:
+      - x86_64-64
+      - aarch64-64
+      - aarch64-32
+      - armv8l-32
+      - armv7l-32
+      - armv6l-32
+  vars_files:
+    - ../../../roles/restic_backup/defaults/main.yml
+    - ../../../roles/restic_backup/vars/main.yml
+  tasks:
+    - name: Check restic downloads exist
+      ansible.builtin.uri:
+        url: >-
+          https://github.com/restic/restic/releases/download/v{{ restic_backup_restic_version
+          }}/restic_{{ restic_backup_restic_version }}_linux_{{ __restic_backup_restic_archmap[item] }}.bz2
+        method: HEAD
+      loop: "{{ __molecule_architectures }}"
+
+    - name: Check resticprofile downloads exist
+      ansible.builtin.uri:
+        url: >-
+          https://github.com/creativeprojects/resticprofile/releases/download/v{{ restic_backup_resticprofile_version
+          }}/resticprofile_no_self_update_{{ restic_backup_resticprofile_version
+          }}_linux_{{ __restic_backup_resticprofile_archmap[item] }}.tar.gz
+        method: HEAD
+      loop: "{{ __molecule_architectures }}"

@@ -1,0 +1,26 @@
+---
+- name: Install and configure restic backup
+  hosts: "{{ restic_backup_hosts | default('all') }}"
+  become: true
+  tasks:
+    - name: Set up restic backup
+      when: restic_backup_enable | default(false) | bool
+      block:
+        - name: Manage the rest-server user for this host
+          ansible.builtin.include_role:
+            name: pypb.homelab.restic_server_users
+          vars:
+            restic_server_users_list:
+              - name: "{{ inventory_hostname_short }}"
+
+        - name: Set credentials for a newly created user
+          ansible.builtin.set_fact:
+            restic_backup_env_list:
+              - "RESTIC_REST_USERNAME={{ inventory_hostname_short }}"
+              - "RESTIC_REST_PASSWORD={{ restic_server_users_generated[inventory_hostname_short] }}"
+          when: inventory_hostname_short in restic_server_users_generated
+          no_log: true
+
+        - name: Configure restic backup
+          ansible.builtin.include_role:
+            name: pypb.homelab.restic_backup

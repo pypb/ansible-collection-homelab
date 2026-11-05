@@ -12,7 +12,8 @@ tags:
   - homelab
   - infrastructure
   - linux
-dependencies: {}
+dependencies:
+  community.docker: ">=5.0.0"
 repository: https://github.com/pypb/homelab
 documentation: https://github.com/pypb/homelab/blob/main/README.md
 homepage: https://github.com/pypb/homelab
@@ -28,6 +29,7 @@ build_ignore:
   - .venv
   - .yamllint
   - CLAUDE.md
+  - extensions
   - pyproject.toml
   - uv.lock
   - "*.tar.gz"

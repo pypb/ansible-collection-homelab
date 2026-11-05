@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  role_name: restic_backup
+  namespace: pypb
+  author: pypb
+  description: Install and configure restic and resticprofile for scheduled backups.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - backup
+    - restic
+    - resticprofile
+dependencies: []

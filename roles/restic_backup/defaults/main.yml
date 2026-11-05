@@ -1,0 +1,115 @@
+---
+# Master switch. The role does nothing unless this is true.
+restic_backup_enable: false
+
+# Install restic and resticprofile. Disable if they are already installed.
+restic_backup_install: true
+
+restic_backup_exclude:
+  - /root/.ansible
+  - /root/.cache
+  - /home/*/Downloads
+  - /home/*/.cache
+  - /home/*/.local/share/tracker/data
+  - /home/*/.var/app/*/cache
+  - .thumbnails
+  - .snapshots
+  - "#snapshots"
+  - "*.pyc"
+  - .nobackup
+  - .bash_history
+  - "*.o"
+  - __pycache__
+  - .cache
+restic_backup_exclude_group: []
+restic_backup_exclude_host: []
+
+restic_backup_include:
+  - /etc
+  - /home
+  - /opt
+  - /root
+  - /srv
+  - /usr/local
+restic_backup_include_group: []
+restic_backup_include_host: []
+
+restic_backup_config_dir: /etc/resticprofile
+restic_backup_config_subdirs:
+  - backup.pre.d
+  - backup.post.d
+  - check.post.d
+
+restic_backup_install_prefix: /usr/local
+
+restic_backup_restic_version: 0.19.1
+restic_backup_restic_url: >-
+  https://github.com/restic/restic/releases/download/v{{ restic_backup_restic_version
+  }}/restic_{{ restic_backup_restic_version }}_linux_{{ __restic_backup_restic_arch }}.bz2
+
+restic_backup_resticprofile_version: 0.33.1
+restic_backup_resticprofile_url: >-
+  https://github.com/creativeprojects/resticprofile/releases/download/v{{ restic_backup_resticprofile_version
+  }}/resticprofile_no_self_update_{{ restic_backup_resticprofile_version }}_linux_{{ __restic_backup_resticprofile_arch }}.tar.gz
+
+restic_backup_repo_url: /var/tmp/restic_backup
+
+# Repository password. Required when the role is enabled.
+# restic_backup_password: "{{ vaulted_restic_password }}"
+
+# Environment variables for resticprofile, as NAME=value strings. The env file
+# is left alone when this is undefined.
+# restic_backup_env_list:
+#   - RESTIC_REST_USERNAME=backup-client
+#   - RESTIC_REST_PASSWORD={{ vaulted_rest_password }}
+
+restic_backup_profiles:
+  defaults:
+    repository: "{{ restic_backup_repo_url }}"
+    password-file: password
+    env-file: "{{ restic_backup_config_dir }}/env"
+    status-file: /var/tmp/resticprofile_status.json
+    backup:
+      verbose: true
+    retention:
+      after-backup: true
+      keep-daily: 7
+      keep-hourly: 48
+      keep-weekly: 4
+      keep-monthly: 3
+      prune: true
+  defaults-files:
+    backup:
+      one-file-system: true
+      exclude-caches: true
+      exclude-if-present: .nobackup
+      exclude: "{{ restic_backup_exclude + restic_backup_exclude_group + restic_backup_exclude_host }}"
+      source: "{{ restic_backup_include + restic_backup_include_group + restic_backup_include_host }}"
+    inherit: defaults
+  defaults-stdin:
+    stdin: true
+    stdin-filename: stdin
+    tag:
+      - stdin
+    inherit: defaults
+
+restic_backup_profiles_group: {}
+
+restic_backup_profiles_host:
+  system:
+    inherit: defaults-files
+    backup:
+      schedule: "*-*-* 01:30:00"
+    check:
+      schedule: "Mon 05:30:00"
+
+restic_backup_schedule_enable: false
+restic_backup_scheduler: systemd
+
+restic_backup_groups:
+  default:
+    profiles:
+      - system
+
+restic_backup_groups_group: {}
+restic_backup_groups_host: {}

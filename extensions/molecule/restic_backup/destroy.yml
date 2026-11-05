@@ -1,0 +1,19 @@
+---
+- name: Destroy test environment
+  hosts: rest-server-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - debian13
+        - ubuntu2404
+        - ubuntu2604
+        - molecule-restic-rest-server
+
+    - name: Remove network
+      community.docker.docker_network:
+        name: molecule-restic
+        state: absent

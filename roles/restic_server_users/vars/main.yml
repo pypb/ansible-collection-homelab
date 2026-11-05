@@ -1,0 +1,14 @@
+---
+__restic_server_users_existing: "{{ __restic_server_users_read['stdout_lines'] }}"
+
+__restic_server_users_present: >-
+  {{ restic_server_users_list
+     | selectattr('state', 'undefined')
+     | union(restic_server_users_list | selectattr('state', 'defined') | selectattr('state', 'in', ['present'])) }}
+
+__restic_server_users_absent_names: >-
+  {{ restic_server_users_list
+     | selectattr('state', 'defined')
+     | selectattr('state', 'in', ['absent'])
+     | map(attribute='name')
+     | intersect(__restic_server_users_existing) }}

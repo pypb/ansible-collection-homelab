@@ -1,0 +1,49 @@
+---
+- name: Config | Create config directory
+  ansible.builtin.file:
+    path: "{{ restic_backup_config_dir }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Config | Create config sub-directories
+  ansible.builtin.file:
+    path: "{{ restic_backup_config_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop: "{{ restic_backup_config_subdirs }}"
+
+- name: Config | Template profiles.yaml
+  ansible.builtin.template:
+    src: profiles.yaml.j2
+    dest: "{{ __restic_backup_profile_config }}"
+    mode: "0600"
+    owner: root
+    group: root
+    backup: true
+  register: __restic_backup_profiles_result
+
+- name: Config | Create password file
+  ansible.builtin.copy:
+    content: "{{ restic_backup_password }}"
+    dest: "{{ restic_backup_config_dir }}/password"
+    mode: "0600"
+    owner: root
+    group: root
+  diff: false
+  no_log: true
+
+# No backup, so that replaced credentials aren't left lying around.
+- name: Config | Template env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ restic_backup_config_dir }}/env"
+    mode: "0600"
+    owner: root
+    group: root
+  when: restic_backup_env_list is defined
+  diff: false
+  no_log: true

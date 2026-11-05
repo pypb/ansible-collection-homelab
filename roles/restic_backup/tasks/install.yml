@@ -1,0 +1,116 @@
+---
+# Skipped in check mode, where apt fails if python3-apt is missing. The packages
+# are only needed for the downloads, which check mode skips as well.
+- name: Install | Install required packages
+  ansible.builtin.apt:
+    name: "{{ __restic_backup_required_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - ansible_facts['os_family'] is match('^Debian$')
+    - not ansible_check_mode
+
+# No module reports the installed version of these binaries.
+- name: Install | Check installed restic version
+  ansible.builtin.command:
+    argv:
+      - "{{ restic_backup_install_prefix }}/bin/restic"
+      - version
+  register: __restic_backup_restic_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install | Check installed resticprofile version
+  ansible.builtin.command:
+    argv:
+      - "{{ restic_backup_install_prefix }}/bin/resticprofile"
+      - version
+  register: __restic_backup_resticprofile_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Downloads can't run in check mode, because they rely on a temporary directory.
+- name: Install | Install restic
+  when:
+    - not ansible_check_mode
+    - >-
+      (__restic_backup_restic_installed['stdout'] | default('')
+       | regex_search(__restic_backup_version_regex)) != restic_backup_restic_version
+  block:
+    - name: Install | Create temporary directory for restic
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: restic
+      register: __restic_backup_restic_tmpdir
+
+    - name: Install | Download restic
+      ansible.builtin.get_url:
+        url: "{{ restic_backup_restic_url }}"
+        dest: "{{ __restic_backup_restic_tmpdir['path'] }}/restic.bz2"
+        mode: "0644"
+
+    # The unarchive module does not support standalone bzip2 files.
+    - name: Install | Uncompress restic
+      ansible.builtin.command:
+        argv:
+          - bunzip2
+          - "{{ __restic_backup_restic_tmpdir['path'] }}/restic.bz2"
+        creates: "{{ __restic_backup_restic_tmpdir['path'] }}/restic"
+
+    - name: Install | Copy restic to the install prefix
+      ansible.builtin.copy:
+        src: "{{ __restic_backup_restic_tmpdir['path'] }}/restic"
+        remote_src: true
+        dest: "{{ restic_backup_install_prefix }}/bin/restic"
+        mode: "0755"
+        owner: root
+        group: root
+  always:
+    - name: Install | Remove temporary directory for restic
+      ansible.builtin.file:
+        path: "{{ __restic_backup_restic_tmpdir['path'] }}"
+        state: absent
+      when: __restic_backup_restic_tmpdir['path'] is defined
+
+- name: Install | Install resticprofile
+  when:
+    - not ansible_check_mode
+    - >-
+      (__restic_backup_resticprofile_installed['stdout'] | default('')
+       | regex_search(__restic_backup_version_regex)) != restic_backup_resticprofile_version
+  block:
+    - name: Install | Create temporary directory for resticprofile
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: resticprofile
+      register: __restic_backup_resticprofile_tmpdir
+
+    - name: Install | Download resticprofile
+      ansible.builtin.get_url:
+        url: "{{ restic_backup_resticprofile_url }}"
+        dest: "{{ __restic_backup_resticprofile_tmpdir['path'] }}/resticprofile.tar.gz"
+        mode: "0644"
+
+    - name: Install | Uncompress resticprofile
+      ansible.builtin.unarchive:
+        src: "{{ __restic_backup_resticprofile_tmpdir['path'] }}/resticprofile.tar.gz"
+        dest: "{{ __restic_backup_resticprofile_tmpdir['path'] }}"
+        remote_src: true
+
+    - name: Install | Copy resticprofile to the install prefix
+      ansible.builtin.copy:
+        src: "{{ __restic_backup_resticprofile_tmpdir['path'] }}/resticprofile"
+        remote_src: true
+        dest: "{{ restic_backup_install_prefix }}/bin/resticprofile"
+        mode: "0755"
+        owner: root
+        group: root
+  always:
+    - name: Install | Remove temporary directory for resticprofile
+      ansible.builtin.file:
+        path: "{{ __restic_backup_resticprofile_tmpdir['path'] }}"
+        state: absent
+      when: __restic_backup_resticprofile_tmpdir['path'] is defined

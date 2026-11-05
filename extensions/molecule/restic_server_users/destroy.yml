@@ -1,0 +1,9 @@
+---
+- name: Destroy rest-server
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Remove rest-server container
+      community.docker.docker_container:
+        name: molecule-rest-server
+        state: absent

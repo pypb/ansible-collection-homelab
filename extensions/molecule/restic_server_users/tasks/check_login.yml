@@ -1,0 +1,8 @@
+---
+- name: Check login against the rest-server API
+  ansible.builtin.uri:
+    url: http://127.0.0.1:18000/
+    url_username: "{{ login_user }}"
+    url_password: "{{ login_password }}"
+    force_basic_auth: true
+    status_code: "{{ [401] if login_rejected else [200, 400, 403, 404, 405] }}"

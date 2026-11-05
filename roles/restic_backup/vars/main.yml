@@ -1,0 +1,50 @@
+---
+__restic_backup_required_facts:
+  - architecture
+  - env
+  - os_family
+  - userspace_bits
+
+__restic_backup_required_packages:
+  - bzip2
+  - ca-certificates
+  - gzip
+  - tar
+
+__restic_backup_platform: "{{ ansible_facts['architecture'] }}-{{ ansible_facts['userspace_bits'] }}"
+
+# restic and resticprofile name their 32-bit ARM builds differently.
+__restic_backup_restic_archmap:
+  x86_64-64: amd64
+  aarch64-64: arm64
+  aarch64-32: arm
+  armv8l-32: arm
+  armv7l-32: arm
+  armv6l-32: arm
+
+__restic_backup_resticprofile_archmap:
+  x86_64-64: amd64
+  aarch64-64: arm64
+  aarch64-32: armv7
+  armv8l-32: armv7
+  armv7l-32: armv7
+  armv6l-32: armv6
+
+__restic_backup_restic_arch: "{{ __restic_backup_restic_archmap[__restic_backup_platform] }}"
+__restic_backup_resticprofile_arch: "{{ __restic_backup_resticprofile_archmap[__restic_backup_platform] }}"
+
+__restic_backup_version_regex: '[0-9]+\.[0-9]+\.[0-9]+'
+
+# Output from restic when the repository has not been initialized.
+__restic_backup_no_repository_regex: "repository does not exist|Is there a repository at the following location"
+
+__restic_backup_profile_config: "{{ restic_backup_config_dir }}/profiles.yaml"
+__restic_backup_path: "{{ restic_backup_install_prefix }}/bin:{{ ansible_facts['env']['PATH'] }}"
+
+__restic_backup_profiles_all:
+  profiles: >-
+    {{ restic_backup_profiles | ansible.builtin.combine(restic_backup_profiles_group, restic_backup_profiles_host) }}
+
+__restic_backup_groups_all:
+  groups: >-
+    {{ restic_backup_groups | ansible.builtin.combine(restic_backup_groups_group, restic_backup_groups_host) }}

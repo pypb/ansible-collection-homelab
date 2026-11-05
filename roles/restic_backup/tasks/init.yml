@@ -1,0 +1,82 @@
+---
+# resticprofile has no module. Running it is the only way to query the repository.
+- name: Init | Check whether the repository exists
+  ansible.builtin.command:
+    argv:
+      - resticprofile
+      - --config
+      - "{{ __restic_backup_profile_config }}"
+      - snapshots
+  environment:
+    PATH: "{{ __restic_backup_path }}"
+  register: __restic_backup_snapshots
+  changed_when: false
+  failed_when:
+    - __restic_backup_snapshots['rc'] != 0
+    - (__restic_backup_snapshots['stdout'] ~ __restic_backup_snapshots['stderr'])
+      is not search(__restic_backup_no_repository_regex)
+
+- name: Init | Initialize repository
+  ansible.builtin.command:
+    argv:
+      - resticprofile
+      - --config
+      - "{{ __restic_backup_profile_config }}"
+      - init
+  environment:
+    PATH: "{{ __restic_backup_path }}"
+  when: __restic_backup_snapshots['rc'] != 0
+  changed_when: true
+
+- name: Init | Find resticprofile unit files
+  ansible.builtin.find:
+    paths: /etc/systemd/system
+    patterns: resticprofile-*
+  register: __restic_backup_units
+
+- name: Init | Schedule all profiles
+  ansible.builtin.command:
+    argv:
+      - resticprofile
+      - --config
+      - "{{ __restic_backup_profile_config }}"
+      - schedule
+      - --all
+  environment:
+    PATH: "{{ __restic_backup_path }}"
+  when:
+    - restic_backup_schedule_enable | bool
+    - >-
+      (__restic_backup_profiles_result | default({})) is changed
+      or __restic_backup_units['matched'] | int < 1
+  changed_when: true
+
+- name: Init | Find scheduled unit files
+  ansible.builtin.find:
+    paths: /etc/systemd/system
+    patterns: resticprofile-*
+  register: __restic_backup_scheduled_units
+  when: restic_backup_schedule_enable | bool
+
+- name: Init | Set unit file permissions
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    mode: "0644"
+  loop: "{{ __restic_backup_scheduled_units['files'] | default([]) }}"
+  loop_control:
+    label: "{{ item['path'] }}"
+
+- name: Init | Unschedule all profiles
+  ansible.builtin.command:
+    argv:
+      - resticprofile
+      - --config
+      - "{{ __restic_backup_profile_config }}"
+      - unschedule
+      - --all
+  environment:
+    PATH: "{{ __restic_backup_path }}"
+  when:
+    - not restic_backup_schedule_enable | bool
+    - __restic_backup_units['matched'] | int > 0
+  changed_when: true

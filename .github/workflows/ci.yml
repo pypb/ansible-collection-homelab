@@ -37,6 +37,28 @@ jobs:
       - run: ansible-test sanity --docker default
         working-directory: ansible_collections/pypb/homelab
 
+  molecule:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - restic_server_users
+          - restic_backup
+    env:
+      ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: ansible_collections/pypb/homelab
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install ansible-core molecule requests
+      - run: ansible-galaxy collection install community.docker
+      - run: molecule test --scenario-name ${{ matrix.scenario }}
+        working-directory: ansible_collections/pypb/homelab/extensions
+
   build:
     runs-on: ubuntu-latest
     steps:

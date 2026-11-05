@@ -1,0 +1,95 @@
+---
+- name: Validate usernames
+  ansible.builtin.assert:
+    that:
+      - item is match('^[^:\\s]+$')
+    fail_msg: "Usernames must not be empty or contain colons or whitespace: {{ item }}"
+    quiet: true
+  loop: "{{ restic_server_users_list | map(attribute='name') | list }}"
+
+# Only the first field is read, so password hashes never reach Ansible's output.
+- name: Read existing rest-server usernames
+  community.docker.docker_container_exec:
+    container: "{{ restic_server_users_container }}"
+    argv:
+      - cut
+      - -d
+      - ":"
+      - -f
+      - "1"
+      - "{{ restic_server_users_htpasswd_path }}"
+  delegate_to: "{{ restic_server_users_host }}"
+  register: __restic_server_users_read
+  changed_when: false
+  check_mode: false
+
+- name: Reset generated passwords
+  ansible.builtin.set_fact:
+    restic_server_users_generated: {}
+
+- name: Generate missing passwords
+  ansible.builtin.set_fact:
+    restic_server_users_generated: >-
+      {{ restic_server_users_generated | combine({
+           item['name']: lookup('ansible.builtin.password', '/dev/null',
+                                length=restic_server_users_password_length | int,
+                                chars=['ascii_letters', 'digits'])
+         }) }}
+  loop: "{{ __restic_server_users_present }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  when:
+    - item['password'] is not defined
+    - >-
+      item['name'] not in __restic_server_users_existing
+      or item['update_password'] | default('on_create') is match('^always$')
+  no_log: true
+
+# The password goes through stdin to keep it out of the container's process list.
+- name: Set rest-server passwords
+  community.docker.docker_container_exec:
+    container: "{{ restic_server_users_container }}"
+    argv:
+      - htpasswd
+      - -B
+      - -i
+      - "{{ restic_server_users_htpasswd_path }}"
+      - "{{ item['name'] }}"
+    stdin: "{{ item['password'] | default(restic_server_users_generated[item['name']]) }}"
+  delegate_to: "{{ restic_server_users_host }}"
+  loop: "{{ __restic_server_users_present }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  register: __restic_server_users_set
+  when: >-
+    item['name'] not in __restic_server_users_existing
+    or item['update_password'] | default('on_create') is match('^always$')
+  throttle: 1
+  no_log: true
+
+- name: Remove rest-server users
+  community.docker.docker_container_exec:
+    container: "{{ restic_server_users_container }}"
+    argv:
+      - htpasswd
+      - -D
+      - "{{ restic_server_users_htpasswd_path }}"
+      - "{{ item }}"
+  delegate_to: "{{ restic_server_users_host }}"
+  loop: "{{ __restic_server_users_absent_names }}"
+  register: __restic_server_users_removed
+  throttle: 1
+
+# rest-server otherwise only notices a changed file up to 30 seconds later, which
+# would fail a client that uses its new credentials straight away.
+- name: Reload rest-server credentials
+  community.docker.docker_container_exec:
+    container: "{{ restic_server_users_container }}"
+    argv:
+      - kill
+      - -HUP
+      - "1"
+  delegate_to: "{{ restic_server_users_host }}"
+  when: __restic_server_users_set is changed or __restic_server_users_removed is changed
+  changed_when: false
+  throttle: 1

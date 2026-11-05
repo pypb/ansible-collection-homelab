@@ -1,0 +1,19 @@
+---
+# Host running the rest-server container. Tasks are delegated to this host.
+restic_server_users_host: "{{ restic_server_hostname | default(inventory_hostname) }}"
+
+# Name of the rest-server container.
+restic_server_users_container: "{{ restic_server_container | default('restic-server') }}"
+
+# Path to the htpasswd file inside the container.
+restic_server_users_htpasswd_path: /data/.htpasswd
+
+# Length of generated passwords.
+restic_server_users_password_length: 32
+
+# Users to manage. Users that are not listed are left alone.
+restic_server_users_list: []
+#  - name: backup-client         # Required
+#    password: "{{ vaulted }}"   # Optional, generated if omitted
+#    state: present              # present (default) or absent
+#    update_password: on_create  # on_create (default) or always

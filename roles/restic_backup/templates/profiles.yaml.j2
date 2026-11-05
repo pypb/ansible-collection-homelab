@@ -1,0 +1,10 @@
+---
+{{ ansible_managed | comment }}
+version: "2"
+
+global:
+  scheduler: "{{ restic_backup_scheduler }}"
+
+{{ __restic_backup_profiles_all | to_nice_yaml(indent=2) }}
+
+{{ __restic_backup_groups_all | to_nice_yaml(indent=2) }}

@@ -1,11 +1,15 @@
 # pypb.homelab
 
-Ansible collection for managing a homelab. It is currently an empty skeleton:
-existing roles will be tidied and migrated into `roles/`.
+Ansible collection for managing a homelab. Existing roles are being tidied and
+migrated into `roles/`.
 
 ## Content
 
-- Roles: none yet
+- Roles:
+  - `restic_backup`: installs and configures restic and resticprofile
+  - `restic_server_users`: manages logins on a containerised rest-server
+- Playbooks:
+  - `restic_backup`: combines both roles
 - Plugins: none yet
 
 Update these lists, and the matching sections of `README.md`, when content is
@@ -17,6 +21,9 @@ added.
 - Install dependencies: `uv sync`
 - Lint: `yamllint .`, `ansible-lint` and `ruff check .`
 - Sanity tests: `ansible-test sanity --docker default`
+- Molecule: run `molecule test --scenario-name <name>` from `extensions/`, with
+  `ANSIBLE_COLLECTIONS_PATH` covering this collection and `community.docker`.
+  With Podman, also start the API socket and set `DOCKER_HOST`
 - Changelog: add a fragment to `changelogs/fragments/`, then run
   `antsibull-changelog release` when releasing
 
@@ -31,5 +38,7 @@ releases.
 - Role names are snake_case. Each role has `meta/argument_specs.yml`.
 - Document collection-wide variables in `README.md`, since they are referenced
   from role defaults rather than declared explicitly.
-- When adding a role, also add its molecule tests and an integration or molecule
-  job to `.github/workflows/ci.yml`.
+- When adding a role, also add a scenario in `extensions/molecule/` and list it in
+  the molecule job in `.github/workflows/ci.yml`.
+- This repo is public. Keep homelab-specific hostnames and values out of it, and
+  copy roles in as clean files rather than importing their git history.

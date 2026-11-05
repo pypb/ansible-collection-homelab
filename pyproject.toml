@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Python environment for developing the pypb.homelab Ansible collection."
 requires-python = ">=3.13"
 dependencies = [
-    "ansible-core>=2.22",
+    "ansible-core>=2.21",
 ]
 
 [dependency-groups]

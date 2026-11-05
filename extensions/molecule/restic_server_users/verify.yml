@@ -1,0 +1,202 @@
+---
+- name: Verify
+  hosts: localhost
+  gather_facts: false
+  vars:
+    restic_server_users_host: localhost
+    restic_server_users_container: molecule-rest-server
+    __molecule_probe: "{{ playbook_dir }}/secret_probe.yml"
+  tasks:
+    - name: Check the explicit password works
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: explicit-user
+        login_password: explicit-password
+        login_rejected: false
+
+    - name: Check a wrong password is rejected
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: explicit-user
+        login_password: wrong-password
+        login_rejected: true
+
+    - name: Create a user with a generated password
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: verify-generated
+
+    - name: Check the generated password has the expected form
+      ansible.builtin.assert:
+        that:
+          - restic_server_users_generated['verify-generated'] is match('^[A-Za-z0-9]{32}$')
+          - restic_server_users_generated | length == 1
+
+    - name: Check the generated password works immediately
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: verify-generated
+        login_password: "{{ restic_server_users_generated['verify-generated'] }}"
+        login_rejected: false
+
+    - name: Keep the generated password
+      ansible.builtin.set_fact:
+        __molecule_generated: "{{ restic_server_users_generated['verify-generated'] }}"
+
+    - name: Read the password hashes
+      community.docker.docker_container_exec:
+        container: molecule-rest-server
+        argv: [cat, /data/.htpasswd]
+      register: __molecule_hashes_before
+      changed_when: false
+
+    - name: Rerun with a different password and on_create
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: explicit-user
+            password: ignored-password
+          - name: verify-generated
+
+    - name: Read the password hashes again
+      community.docker.docker_container_exec:
+        container: molecule-rest-server
+        argv: [cat, /data/.htpasswd]
+      register: __molecule_hashes_after
+      changed_when: false
+
+    - name: Check on_create kept the hashes and generated nothing
+      ansible.builtin.assert:
+        that:
+          - __molecule_hashes_before['stdout'] == __molecule_hashes_after['stdout']
+          - restic_server_users_generated | length == 0
+
+    - name: Rotate an explicit password
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: explicit-user
+            password: rotated-password
+            update_password: always
+
+    - name: Check the rotated password works
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: explicit-user
+        login_password: rotated-password
+        login_rejected: false
+
+    - name: Check the old password is rejected
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: explicit-user
+        login_password: explicit-password
+        login_rejected: true
+
+    - name: Rotate a generated password
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: verify-generated
+            update_password: always
+
+    - name: Check the password was replaced
+      ansible.builtin.assert:
+        that:
+          - restic_server_users_generated['verify-generated'] != __molecule_generated
+
+    - name: Keep the rotated password
+      ansible.builtin.set_fact:
+        __molecule_rotated: "{{ restic_server_users_generated['verify-generated'] }}"
+
+    - name: Remove a user
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: explicit-user
+            state: absent
+
+    - name: Check the removed user is rejected
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: explicit-user
+        login_password: rotated-password
+        login_rejected: true
+
+    - name: Check the other users were left alone
+      ansible.builtin.include_tasks: tasks/check_login.yml
+      vars:
+        login_user: verify-generated
+        login_password: "{{ __molecule_rotated }}"
+        login_rejected: false
+
+    - name: Run the probe in check mode
+      ansible.builtin.command:
+        argv: [ansible-playbook, --check, "{{ __molecule_probe }}"]
+      changed_when: false
+
+    - name: Read the usernames after check mode
+      community.docker.docker_container_exec:
+        container: molecule-rest-server
+        argv: [cut, -d, ":", -f, "1", /data/.htpasswd]
+      register: __molecule_users_check_mode
+      changed_when: false
+
+    - name: Check that check mode created no users
+      ansible.builtin.assert:
+        that:
+          - "'probe-user' not in __molecule_users_check_mode['stdout_lines']"
+          - "'probe-generated' not in __molecule_users_check_mode['stdout_lines']"
+
+    - name: Run the probe with maximum verbosity
+      ansible.builtin.command:
+        argv: [ansible-playbook, -vvv, "{{ __molecule_probe }}"]
+      register: __molecule_probe_run
+      changed_when: false
+      no_log: true
+
+    - name: Check the output holds no secrets or hashes
+      ansible.builtin.assert:
+        that:
+          - __molecule_probe_run['stdout'] is not search('probe-secret-value')
+          - __molecule_probe_run['stdout'] is not search('\$2y\$')
+          - __molecule_probe_run['stdout'] is search('censored')
+        quiet: true
+      no_log: true
+
+    - name: Read the usernames after the probe
+      community.docker.docker_container_exec:
+        container: molecule-rest-server
+        argv: [cut, -d, ":", -f, "1", /data/.htpasswd]
+      register: __molecule_users_probe
+      changed_when: false
+
+    - name: Check the probe created its users
+      ansible.builtin.assert:
+        that:
+          - "'probe-user' in __molecule_users_probe['stdout_lines']"
+          - "'probe-generated' in __molecule_users_probe['stdout_lines']"
+
+    - name: Check validation rejects a bad username
+      block:
+        - name: Attempt to create a user with a colon in its name
+          ansible.builtin.include_role:
+            name: pypb.homelab.restic_server_users
+          vars:
+            restic_server_users_list:
+              - name: "bad:user"
+
+        - name: Fail if the bad username was accepted
+          ansible.builtin.fail:
+            msg: A username containing a colon was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate usernames')

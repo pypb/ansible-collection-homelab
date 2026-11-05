@@ -1,0 +1,64 @@
+---
+- name: Create test environment
+  hosts: rest-server-host
+  gather_facts: false
+  vars:
+    __molecule_network: molecule-restic
+    __molecule_platforms:
+      - name: debian13
+        image: docker.io/library/debian:13
+      - name: ubuntu2404
+        image: docker.io/library/ubuntu:24.04
+      - name: ubuntu2604
+        image: docker.io/library/ubuntu:26.04
+  tasks:
+    - name: Create network
+      community.docker.docker_network:
+        name: "{{ __molecule_network }}"
+
+    - name: Start rest-server container
+      community.docker.docker_container:
+        name: molecule-restic-rest-server
+        image: docker.io/restic/rest-server:0.14.0
+        networks:
+          - name: "{{ __molecule_network }}"
+        state: started
+
+    # The CLI works with both Docker and Podman. The image build module needs buildx.
+    - name: Build systemd test images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --build-arg
+          - "BASE_IMAGE={{ item['image'] }}"
+          - --tag
+          - "localhost/molecule-restic-{{ item['name'] }}:latest"
+          - --file
+          - "{{ playbook_dir }}/Containerfile"
+          - "{{ playbook_dir }}"
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: false
+
+    - name: Start systemd test containers
+      community.docker.docker_container:
+        name: "{{ item['name'] }}"
+        image: "localhost/molecule-restic-{{ item['name'] }}:latest"
+        hostname: "{{ item['name'] }}"
+        command: /lib/systemd/systemd
+        privileged: true
+        cgroupns_mode: host
+        volumes:
+          - /sys/fs/cgroup:/sys/fs/cgroup:rw
+        tmpfs:
+          - /run
+          - /run/lock
+          - /tmp
+        networks:
+          - name: "{{ __molecule_network }}"
+        state: started
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"

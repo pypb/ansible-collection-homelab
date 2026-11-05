@@ -2,13 +2,11 @@
 
 Ansible roles and plugins for managing my homelab.
 
-This collection is a skeleton for now. Roles will be added as they are tidied
-and migrated.
-
 ## Requirements
 
-- ansible-core 2.22 or newer
-- Python 3.13 or newer on the control node
+- ansible-core 2.21 or newer
+- [`community.docker`](https://docs.ansible.com/ansible/latest/collections/community/docker/)
+  5.0.0 or newer, which is installed automatically with this collection
 
 ## Installation
 
@@ -22,7 +20,23 @@ ansible-galaxy collection install git+https://github.com/pypb/homelab.git
 
 ### Roles
 
-None yet.
+| Role | Description | Platforms |
+|---|---|---|
+| [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
+| [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
+
+### Playbooks
+
+| Playbook | Description |
+|---|---|
+| [`pypb.homelab.restic_backup`](playbooks/restic_backup.yml) | Creates a rest-server user for each host with `restic_backup_enable` set, and configures backups with the generated credentials |
+
+```shell
+ansible-playbook pypb.homelab.restic_backup -e restic_backup_hosts=backup_clients
+```
+
+The playbook targets the hosts in `restic_backup_hosts`, which defaults to `all`.
+It only acts on hosts where `restic_backup_enable` is true.
 
 ### Plugins
 
@@ -30,9 +44,13 @@ None yet.
 
 ### Collection-wide variables
 
-None yet. Roles that share configuration should reference a collection-wide
-variable from their `defaults/main.yml`, and that variable should be documented
-here.
+These are not set by any role, but roles use them as defaults when they are
+defined in your inventory.
+
+| Variable | Used by | Description |
+|---|---|---|
+| `restic_server_hostname` | `restic_server_users` | Host running the rest-server container |
+| `restic_server_container` | `restic_server_users` | Name of the rest-server container |
 
 ## Development
 
@@ -47,7 +65,15 @@ ansible-lint
 ruff check .
 ansible-test sanity --docker default
 ansible-galaxy collection build
+
+cd extensions
+molecule test --scenario-name restic_server_users
+molecule test --scenario-name restic_backup
 ```
+
+The molecule scenarios need Docker, or Podman with its API socket enabled and
+`DOCKER_HOST` pointing to it. They also need this collection and `community.docker`
+on `ANSIBLE_COLLECTIONS_PATH`.
 
 Describe each change in a fragment under `changelogs/fragments/`, then generate
 the changelog at release time with `antsibull-changelog release`.

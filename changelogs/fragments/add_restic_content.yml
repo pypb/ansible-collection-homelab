@@ -1,0 +1,5 @@
+---
+minor_changes:
+  - restic_backup - add the role, migrated from the standalone ``pypb.restic_backup`` role.
+  - restic_backup playbook - add a playbook that sets up rest-server users and restic backups.
+  - restic_server_users - add a role that manages logins on a containerised rest-server.

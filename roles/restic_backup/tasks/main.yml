@@ -1,0 +1,47 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - restic_backup_password is defined
+    fail_msg: restic_backup_password is required when restic_backup_enable is true
+    quiet: true
+  when: restic_backup_enable | bool
+  tags: always
+
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when:
+    - restic_backup_enable | bool
+    - __restic_backup_required_facts | difference(ansible_facts.keys() | list) | length > 0
+  tags: always
+
+- name: Install restic and resticprofile
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/install.yml"
+    apply:
+      tags: restic_backup_install
+  when:
+    - restic_backup_enable | bool
+    - restic_backup_install | bool
+  tags: always
+
+- name: Configure resticprofile
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/config.yml"
+    apply:
+      tags: restic_backup_config
+  when: restic_backup_enable | bool
+  tags: always
+
+# Initializing and scheduling need the files from the previous steps to exist
+# on the host, which is not the case in check mode.
+- name: Initialize repository and schedule profiles
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/init.yml"
+    apply:
+      tags: restic_backup_init
+  when:
+    - restic_backup_enable | bool
+    - not ansible_check_mode
+  tags: always

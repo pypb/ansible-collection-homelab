@@ -1,0 +1,61 @@
+---
+argument_specs:
+  main:
+    short_description: Manage user logins on a containerised restic rest-server.
+    description:
+      - Creates, updates and removes logins in the htpasswd file of a restic
+        rest-server running in a container.
+      - Sets C(restic_server_users_generated), a dictionary of the passwords
+        generated during this run, keyed by username.
+    author:
+      - pypb
+    options:
+      restic_server_users_host:
+        type: str
+        description:
+          - Host running the rest-server container. Tasks are delegated to it.
+          - Defaults to C(restic_server_hostname) if set, otherwise the current host.
+      restic_server_users_container:
+        type: str
+        description:
+          - Name of the rest-server container.
+          - Defaults to C(restic_server_container) if set, otherwise C(restic-server).
+      restic_server_users_htpasswd_path:
+        type: path
+        default: /data/.htpasswd
+        description: Path to the htpasswd file inside the container.
+      restic_server_users_password_length:
+        type: int
+        default: 32
+        description: Length of generated passwords.
+      restic_server_users_list:
+        type: list
+        elements: dict
+        default: []
+        description: Users to manage. Users that are not listed are left alone.
+        options:
+          name:
+            type: str
+            required: true
+            description: Username. Must not contain colons or whitespace.
+          password:
+            type: str
+            description: Password for the user. Generated if omitted.
+          state:
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+            description:
+              - Whether the login should exist.
+              - C(absent) removes the login only. Repository data stays on disk.
+          update_password:
+            type: str
+            choices:
+              - on_create
+              - always
+            default: on_create
+            description:
+              - C(on_create) sets the password only when creating the user.
+              - C(always) sets it on every run, and reports a change each time.
