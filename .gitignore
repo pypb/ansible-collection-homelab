@@ -1,0 +1,13 @@
+# Local environment
+.venv/
+.envrc
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Build and test output
+*.tar.gz
+tests/output/
+.ansible/

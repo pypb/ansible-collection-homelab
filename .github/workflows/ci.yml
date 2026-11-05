@@ -1,0 +1,48 @@
+---
+name: CI
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install ansible-core ansible-lint yamllint
+      - run: yamllint .
+      - run: ansible-lint
+
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      # ansible-test only runs from a path ending in
+      # ansible_collections/<namespace>/<name>.
+      - uses: actions/checkout@v7
+        with:
+          path: ansible_collections/pypb/homelab
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install ansible-core
+      - run: ansible-test sanity --docker default
+        working-directory: ansible_collections/pypb/homelab
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install ansible-core
+      - run: ansible-galaxy collection build

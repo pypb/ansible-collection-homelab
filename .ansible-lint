@@ -1,0 +1,12 @@
+---
+profile: production
+
+exclude_paths:
+  - .github/
+  - .venv/
+  - changelogs/
+  - tests/output/
+
+# ansible-lint's built-in list stops at ansible-core 2.19.
+supported_ansible_also:
+  - "2.22"
