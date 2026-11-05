@@ -14,10 +14,10 @@ tags:
   - linux
 dependencies:
   community.docker: ">=5.0.0"
-repository: https://github.com/pypb/homelab
-documentation: https://github.com/pypb/homelab/blob/main/README.md
-homepage: https://github.com/pypb/homelab
-issues: https://github.com/pypb/homelab/issues
+repository: https://github.com/pypb/ansible-collection-homelab
+documentation: https://github.com/pypb/ansible-collection-homelab/blob/main/README.md
+homepage: https://github.com/pypb/ansible-collection-homelab
+issues: https://github.com/pypb/ansible-collection-homelab/issues
 build_ignore:
   - .ansible
   - .ansible-lint

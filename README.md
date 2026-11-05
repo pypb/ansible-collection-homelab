@@ -13,7 +13,7 @@ Ansible roles and plugins for managing my homelab.
 The collection is not published on Ansible Galaxy. Install it from Git:
 
 ```shell
-ansible-galaxy collection install git+https://github.com/pypb/homelab.git
+ansible-galaxy collection install git+https://github.com/pypb/ansible-collection-homelab.git
 ```
 
 ## Content
