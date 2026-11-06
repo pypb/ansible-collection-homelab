@@ -1,5 +1,0 @@
----
-minor_changes:
-  - smtp_client - add the role, which replaces the standalone ``pypb.msmtp`` role and adds mail aliases through ``smtp_client_aliases``.
-    It no longer replaces other MTAs unless ``smtp_client_remove_other_mta`` is true.
-    All variables now start with ``smtp_client_``, and ``install_msmtp_mta`` is now ``smtp_client_install_sendmail``.
