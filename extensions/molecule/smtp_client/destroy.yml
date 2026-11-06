@@ -1,0 +1,24 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - smtp-client-debian13
+        - smtp-client-ubuntu2404
+        - smtp-client-ubuntu2604
+        - smtp-client-disabled
+        - smtp-client-postfix
+        - "{{ __molecule_relay }}"
+        - "{{ __molecule_login_relay }}"
+
+    - name: Remove network
+      community.docker.docker_network:
+        name: "{{ __molecule_network }}"
+        state: absent

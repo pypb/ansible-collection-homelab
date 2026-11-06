@@ -47,6 +47,7 @@ jobs:
         scenario:
           - restic_server_users
           - restic_backup
+          - smtp_client
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

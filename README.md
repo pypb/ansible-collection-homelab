@@ -22,6 +22,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 
 | Role | Description | Platforms |
 |---|---|---|
+| [`pypb.homelab.smtp_client`](roles/smtp_client/README.md) | Sets up msmtp as the sendmail and SMTP client of a server, with mail aliases | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
 
@@ -69,6 +70,7 @@ ansible-galaxy collection build
 cd extensions
 molecule test --scenario-name restic_server_users
 molecule test --scenario-name restic_backup
+molecule test --scenario-name smtp_client
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and

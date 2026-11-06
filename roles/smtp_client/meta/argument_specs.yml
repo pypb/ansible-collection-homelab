@@ -1,0 +1,69 @@
+---
+argument_specs:
+  main:
+    short_description: Set up msmtp as the sendmail and SMTP client of a server.
+    description:
+      - Installs msmtp and optionally C(sendmail), and configures them so that the
+        host sends all its mail through an SMTP relay.
+      - Manages mail aliases in C(/etc/aliases).
+    author:
+      - pypb
+    options:
+      smtp_client_install:
+        type: bool
+        default: true
+        description: Install msmtp.
+      smtp_client_install_sendmail:
+        type: bool
+        default: true
+        description:
+          - Install the msmtp-mta package, which provides C(sendmail).
+          - This conflicts with other MTAs. See C(smtp_client_remove_other_mta).
+      smtp_client_remove_other_mta:
+        type: bool
+        default: false
+        description:
+          - Let msmtp-mta replace other MTAs, such as Postfix, if any are installed.
+          - If this is false and one is, the role reports it and does nothing else on that host.
+          - Has no effect when C(smtp_client_install_sendmail) is false, since msmtp alone doesn't conflict with other MTAs.
+      smtp_client_configure:
+        type: bool
+        default: true
+        description: Template C(/etc/msmtprc) and manage C(/etc/aliases).
+      smtp_client_from:
+        type: str
+        default: "%U@%M"
+        description: Envelope sender. Supports the substitution patterns of the msmtp C(from) command.
+      smtp_client_tls:
+        type: bool
+        default: true
+        description: Use TLS for the connection to the relay.
+      smtp_client_starttls:
+        type: bool
+        default: true
+        description: Start TLS with the STARTTLS command rather than when connecting.
+      smtp_client_helo_domain:
+        type: str
+        default: "%M"
+        description: Domain sent in the SMTP EHLO command.
+      smtp_client_relay_host:
+        type: str
+        description: Relay to send all mail through. Required when C(smtp_client_configure) is true.
+      smtp_client_relay_port:
+        type: int
+        default: 25
+        description: Port of the relay.
+      smtp_client_relay_user:
+        type: str
+        description: Login for the relay. Requires C(smtp_client_relay_password).
+      smtp_client_relay_password:
+        type: str
+        no_log: true
+        description: Password for the relay. Requires C(smtp_client_relay_user).
+      smtp_client_aliases:
+        type: dict
+        default: {}
+        description:
+          - Entries for C(/etc/aliases), as local names mapped to comma-separated addresses.
+          - Merged into the file, so other entries are left alone. A null value removes an entry.
+          - The name C(default) catches every local name without its own entry.

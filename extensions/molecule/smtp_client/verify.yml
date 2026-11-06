@@ -1,0 +1,384 @@
+---
+- name: Verify a relay without login
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read msmtprc details
+      ansible.builtin.stat:
+        path: /etc/msmtprc
+      register: __molecule_msmtprc
+
+    - name: Check msmtprc is readable by users who send mail
+      ansible.builtin.assert:
+        that:
+          - __molecule_msmtprc['stat']['mode'] == '0644'
+          - __molecule_msmtprc['stat']['pw_name'] == 'root'
+          - __molecule_msmtprc['stat']['gr_name'] == 'msmtp'
+
+    - name: Read the mail name
+      ansible.builtin.slurp:
+        src: /etc/mailname
+      register: __molecule_mailname
+
+    # This reads /etc/aliases and /etc/mailname, and fails if either is missing.
+    - name: Resolve a local recipient as an unprivileged user
+      ansible.builtin.command:
+        argv: [setpriv, --reuid=65534, --regid=65534, --clear-groups, /usr/sbin/sendmail, --pretend, root]
+      environment:
+        HOME: /nonexistent
+        USER: nobody
+      register: __molecule_pretend
+      changed_when: false
+
+    - name: Check the sender and domain use the mail name
+      ansible.builtin.assert:
+        that:
+          - __molecule_pretend['stdout'] is search('from = nobody@' ~ __molecule_mailname_value)
+          - __molecule_pretend['stdout'] is search('domain = ' ~ __molecule_mailname_value)
+      vars:
+        __molecule_mailname_value: "{{ __molecule_mailname['content'] | b64decode | trim }}"
+
+    - name: Send mail as an unprivileged user
+      ansible.builtin.command:
+        argv: [setpriv, --reuid=65534, --regid=65534, --clear-groups, /usr/sbin/sendmail, -i, recipient@example.com]
+        stdin: "To: recipient@example.com\nSubject: plain {{ inventory_hostname }}\n\nBody\n"
+      environment:
+        HOME: /nonexistent
+        USER: nobody
+      changed_when: false
+
+    - name: Send mail to an alias
+      ansible.builtin.command:
+        argv: [/usr/sbin/sendmail, --debug, -i, root]
+        stdin: "To: root\nSubject: alias {{ inventory_hostname }}\n\nBody\n"
+      register: __molecule_alias_send
+      changed_when: false
+
+    - name: Check the alias was resolved
+      ansible.builtin.assert:
+        that:
+          - __molecule_alias_send['stdout'] is search('RCPT TO:<aliased@example.com>')
+
+    - name: Add an alias the role doesn't manage
+      ansible.builtin.lineinfile:
+        path: /etc/aliases
+        line: "postmaster: root"
+
+    - name: Change and remove aliases
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_relay_host: relay.example.com
+        smtp_client_aliases:
+          root: changed@example.com
+          retired: null
+
+    - name: Read the aliases
+      ansible.builtin.slurp:
+        src: /etc/aliases
+      register: __molecule_aliases
+
+    - name: Check the aliases were merged
+      ansible.builtin.assert:
+        that:
+          - __molecule_alias_lines | select('match', '^root:') == ['root: changed@example.com']
+          - __molecule_alias_lines | select('match', '^retired:') | length == 0
+          - "'postmaster: root' in __molecule_alias_lines"
+      vars:
+        __molecule_alias_lines: "{{ (__molecule_aliases['content'] | b64decode).splitlines() }}"
+
+    - name: Restore the relay for the checks that follow
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_relay_host: molecule-smtp-client-relay
+        smtp_client_relay_port: 1025
+        smtp_client_tls: false
+        smtp_client_starttls: false
+
+- name: Check the relay received the mail
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Read messages from the relay
+      ansible.builtin.uri:
+        url: "{{ __molecule_relay_api }}/api/v1/messages"
+      register: __molecule_messages
+
+    - name: Check a message arrived from each target
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('plain ' ~ item) in __molecule_messages['json']['messages'] | map(attribute='Subject')
+        quiet: true
+      loop: "{{ groups['targets'] }}"
+
+- name: Verify that turning everything off does nothing
+  hosts: disabled
+  gather_facts: false
+  tasks:
+    - name: Check whether msmtp is installed
+      ansible.builtin.command:
+        argv: [dpkg-query, --show, msmtp]
+      register: __molecule_dpkg
+      changed_when: false
+      failed_when: __molecule_dpkg['rc'] == 0
+
+    - name: Read the details of files the role would create
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/msmtprc
+        - /etc/mailname
+        - /etc/aliases
+      register: __molecule_absent
+
+    - name: Check no files were created
+      ansible.builtin.assert:
+        that:
+          - __molecule_absent['results'] | map(attribute='stat') | map(attribute='exists') | unique == [false]
+
+    - name: Check validation rejects a missing relay
+      block:
+        - name: Attempt to configure msmtp without a relay
+          ansible.builtin.include_role:
+            name: pypb.homelab.smtp_client
+          vars:
+            smtp_client_install: false
+            smtp_client_install_sendmail: false
+
+        - name: Fail if the missing relay was accepted
+          ansible.builtin.fail:
+            msg: A configuration without a relay was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate relay settings')
+
+    - name: Check validation rejects an invalid alias
+      block:
+        - name: Attempt to configure an alias that is an address
+          ansible.builtin.include_role:
+            name: pypb.homelab.smtp_client
+          vars:
+            smtp_client_install: false
+            smtp_client_install_sendmail: false
+            smtp_client_relay_host: relay.example.com
+            smtp_client_aliases:
+              root@example.com: admin@example.com
+
+        - name: Fail if the invalid alias was accepted
+          ansible.builtin.fail:
+            msg: An alias containing an at sign was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate aliases')
+
+    - name: Check validation rejects a login without a password
+      block:
+        - name: Attempt to configure msmtp without a password
+          ansible.builtin.include_role:
+            name: pypb.homelab.smtp_client
+          vars:
+            smtp_client_install: false
+            smtp_client_install_sendmail: false
+            smtp_client_relay_host: relay.example.com
+            smtp_client_relay_user: molecule-user
+
+        - name: Fail if the missing password was accepted
+          ansible.builtin.fail:
+            msg: A login without a password was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate relay settings')
+
+- name: Verify that the role leaves another MTA alone by default
+  hosts: conflict
+  gather_facts: false
+  tasks:
+    - name: Check postfix is still installed
+      ansible.builtin.command:
+        argv: [dpkg-query, --show, "--showformat=${Status}", postfix]
+      register: __molecule_postfix
+      changed_when: false
+      failed_when: __molecule_postfix['stdout'] != 'install ok installed'
+
+    - name: Check whether msmtp is installed
+      ansible.builtin.command:
+        argv: [dpkg-query, --show, msmtp]
+      register: __molecule_msmtp
+      changed_when: false
+      failed_when: __molecule_msmtp['rc'] == 0
+
+    - name: Read msmtprc details
+      ansible.builtin.stat:
+        path: /etc/msmtprc
+      register: __molecule_msmtprc
+
+    - name: Check msmtprc wasn't created
+      ansible.builtin.assert:
+        that:
+          - not __molecule_msmtprc['stat']['exists']
+
+- name: Check the role reports the other MTA
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Run converge against the host with the other MTA
+      ansible.builtin.command:
+        argv:
+          - ansible-playbook
+          - --inventory
+          - "{{ inventory_file }}"
+          - --limit
+          - smtp-client-postfix
+          - "{{ playbook_dir }}/converge.yml"
+      register: __molecule_conflict_run
+      changed_when: false
+
+    - name: Check the message names the MTA and nothing changed
+      ansible.builtin.assert:
+        that:
+          - __molecule_conflict_run['stdout'] is search('because\\s+postfix would have to be replaced')
+          - __molecule_conflict_run['stdout'] is search('smtp-client-postfix\\s*:.*changed=0.*failed=0')
+
+- name: Verify replacing another MTA
+  hosts: conflict
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Replace the other MTA
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_remove_other_mta: true
+        smtp_client_relay_host: "{{ __molecule_relay }}"
+        smtp_client_relay_port: 1025
+        smtp_client_tls: false
+        smtp_client_starttls: false
+
+    - name: Read package states
+      ansible.builtin.command:
+        argv: [dpkg-query, --show, "--showformat=${Package} ${Status}\n", postfix, bsd-mailx, msmtp-mta]
+      register: __molecule_packages
+      changed_when: false
+
+    - name: Check msmtp-mta replaced postfix and kept what depends on an MTA
+      ansible.builtin.assert:
+        that:
+          - "'postfix install ok installed' not in __molecule_packages['stdout_lines']"
+          - "'msmtp-mta install ok installed' in __molecule_packages['stdout_lines']"
+          - "'bsd-mailx install ok installed' in __molecule_packages['stdout_lines']"
+
+    - name: Send mail through the replacement
+      ansible.builtin.command:
+        argv: [/usr/sbin/sendmail, -i, recipient@example.com]
+        stdin: "To: recipient@example.com\nSubject: replaced {{ inventory_hostname }}\n\nBody\n"
+      changed_when: false
+
+- name: Check the relay received mail from the replacement
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Read messages from the relay
+      ansible.builtin.uri:
+        url: "{{ __molecule_relay_api }}/api/v1/messages"
+      register: __molecule_replaced_messages
+
+    - name: Check the message arrived
+      ansible.builtin.assert:
+        that:
+          - "'replaced smtp-client-postfix' in __molecule_replaced_messages['json']['messages'] | map(attribute='Subject')"
+
+- name: Verify a relay with STARTTLS and a login
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Configure msmtp with a login
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_relay_host: "{{ __molecule_login_relay }}"
+        smtp_client_relay_port: 1025
+        smtp_client_relay_user: "{{ __molecule_login_user }}"
+        smtp_client_relay_password: "{{ __molecule_login_password }}"
+
+    - name: Read msmtprc details
+      ansible.builtin.stat:
+        path: /etc/msmtprc
+      register: __molecule_msmtprc
+
+    - name: Check msmtprc is no longer readable by everyone
+      ansible.builtin.assert:
+        that:
+          - __molecule_msmtprc['stat']['mode'] == '0640'
+          - __molecule_msmtprc['stat']['gr_name'] == 'msmtp'
+
+    - name: Check an unprivileged user can't use the login
+      ansible.builtin.command:
+        argv: [setpriv, --reuid=65534, --regid=65534, --clear-groups, /usr/sbin/sendmail, --pretend, recipient@example.com]
+      environment:
+        HOME: /nonexistent
+        USER: nobody
+      register: __molecule_denied
+      changed_when: false
+      failed_when: __molecule_denied['rc'] == 0
+
+    # The relay's certificate is self-signed, so it can't be verified.
+    - name: Send mail with the login
+      ansible.builtin.command:
+        argv: [/usr/sbin/sendmail, --tls-certcheck=off, -i, recipient@example.com]
+        stdin: "To: recipient@example.com\nSubject: login {{ inventory_hostname }}\n\nBody\n"
+      changed_when: false
+
+- name: Check the login relay received the mail
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Read messages from the login relay
+      ansible.builtin.uri:
+        url: "{{ __molecule_login_relay_api }}/api/v1/messages"
+      register: __molecule_login_messages
+
+    - name: Check a message arrived from each target
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('login ' ~ item) in __molecule_login_messages['json']['messages'] | map(attribute='Subject')
+        quiet: true
+      loop: "{{ groups['targets'] }}"
+
+    - name: Run the probe with a diff and maximum verbosity
+      ansible.builtin.command:
+        argv:
+          - ansible-playbook
+          - --inventory
+          - "{{ inventory_file }}"
+          - --diff
+          - -vvv
+          - "{{ playbook_dir }}/secret_probe.yml"
+      register: __molecule_probe_run
+      changed_when: false
+      no_log: true
+
+    - name: Check the output holds no secrets
+      ansible.builtin.assert:
+        that:
+          - __molecule_probe_run['stdout'] is not search('probe-secret-value')
+          - __molecule_probe_run['stdout'] is search('smtp-client-debian13.*changed=1')
+        quiet: true
+      no_log: true

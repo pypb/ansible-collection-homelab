@@ -1,0 +1,13 @@
+---
+- name: Prepare a host with another MTA
+  hosts: conflict
+  gather_facts: false
+  tasks:
+    # bsd-mailx depends on having an MTA, so it shows whether replacing one removes
+    # the packages that rely on it.
+    - name: Install postfix and a package that depends on an MTA
+      ansible.builtin.apt:
+        name:
+          - postfix
+          - bsd-mailx
+        update_cache: true
