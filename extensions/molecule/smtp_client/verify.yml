@@ -81,8 +81,8 @@
     - name: Check the aliases were merged
       ansible.builtin.assert:
         that:
-          - __molecule_alias_lines | select('match', '^root:') == ['root: changed@example.com']
-          - __molecule_alias_lines | select('match', '^retired:') | length == 0
+          - "__molecule_alias_lines | select('match', '^root:') | list == ['root: changed@example.com']"
+          - "__molecule_alias_lines | select('match', '^retired:') | list | length == 0"
           - "'postmaster: root' in __molecule_alias_lines"
       vars:
         __molecule_alias_lines: "{{ (__molecule_aliases['content'] | b64decode).splitlines() }}"
