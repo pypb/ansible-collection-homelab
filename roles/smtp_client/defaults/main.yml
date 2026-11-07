@@ -1,0 +1,37 @@
+---
+# Install msmtp, the SMTP client this role sets up.
+smtp_client_install: true
+
+# Install the msmtp-mta package, which provides sendmail. It conflicts with other MTAs.
+smtp_client_install_sendmail: true
+
+# Let msmtp-mta replace other MTAs, such as Postfix, if any are installed. If this
+# is false and one is, the role reports it and does nothing else on that host.
+smtp_client_remove_other_mta: false
+
+# Template /etc/msmtprc and manage /etc/aliases. Requires smtp_client_relay_host.
+smtp_client_configure: true
+
+# Envelope sender. %U is the user name and %M the contents of /etc/mailname.
+smtp_client_from: "%U@%M"
+
+smtp_client_tls: true
+smtp_client_starttls: true
+
+# Domain sent in the SMTP EHLO command.
+smtp_client_helo_domain: "%M"
+
+# Relay to send all mail through. Required when smtp_client_configure is true.
+# smtp_client_relay_host: mail.example.com
+smtp_client_relay_port: 25
+
+# Relay login. Set both or neither.
+# smtp_client_relay_user: server
+# smtp_client_relay_password: "{{ vaulted_smtp_relay_password }}"
+
+# Entries for /etc/aliases, merged into the file. Other entries are left alone.
+# A null value removes an entry.
+smtp_client_aliases: {}
+#  root: admin@example.com
+#  backup: admin@example.com, backup@example.com
+#  retired: null

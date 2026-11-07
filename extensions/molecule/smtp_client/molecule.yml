@@ -1,0 +1,61 @@
+---
+platforms:
+  - name: smtp-client-debian13
+    image: docker.io/library/debian:13
+  - name: smtp-client-ubuntu2404
+    image: docker.io/library/ubuntu:24.04
+  - name: smtp-client-ubuntu2604
+    image: docker.io/library/ubuntu:26.04
+  - name: smtp-client-disabled
+    image: docker.io/library/debian:13
+  - name: smtp-client-postfix
+    image: docker.io/library/debian:13
+
+provisioner:
+  name: ansible
+  inventory:
+    hosts:
+      controller:
+        hosts:
+          molecule-host:
+            ansible_connection: local
+            ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      targets:
+        hosts:
+          smtp-client-debian13:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          smtp-client-ubuntu2404:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          smtp-client-ubuntu2604:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+      disabled:
+        hosts:
+          smtp-client-disabled:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+      conflict:
+        hosts:
+          smtp-client-postfix:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+  config_options:
+    defaults:
+      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+      host_key_checking: false
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - prepare
+    - check
+    - converge
+    - idempotence
+    - verify
+    - destroy

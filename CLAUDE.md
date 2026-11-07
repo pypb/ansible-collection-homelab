@@ -6,6 +6,7 @@ migrated into `roles/`.
 ## Content
 
 - Roles:
+  - `smtp_client`: sets up msmtp as the sendmail and SMTP client of a server, sending mail through a relay
   - `restic_backup`: installs and configures restic and resticprofile
   - `restic_server_users`: manages logins on a containerised rest-server
 - Playbooks:

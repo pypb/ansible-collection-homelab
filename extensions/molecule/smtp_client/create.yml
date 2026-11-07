@@ -1,0 +1,89 @@
+---
+- name: Create test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  vars:
+    __molecule_platforms:
+      - name: smtp-client-debian13
+        image: docker.io/library/debian:13
+      - name: smtp-client-ubuntu2404
+        image: docker.io/library/ubuntu:24.04
+      - name: smtp-client-ubuntu2604
+        image: docker.io/library/ubuntu:26.04
+      - name: smtp-client-disabled
+        image: docker.io/library/debian:13
+      - name: smtp-client-postfix
+        image: docker.io/library/debian:13
+  tasks:
+    - name: Create network
+      community.docker.docker_network:
+        name: "{{ __molecule_network }}"
+
+    - name: Start relay without login
+      community.docker.docker_container:
+        name: "{{ __molecule_relay }}"
+        image: docker.io/axllent/mailpit:v1.33.0
+        networks:
+          - name: "{{ __molecule_network }}"
+        published_ports:
+          - 127.0.0.1:18025:8025
+        state: started
+
+    - name: Start relay that requires STARTTLS and a login
+      community.docker.docker_container:
+        name: "{{ __molecule_login_relay }}"
+        image: docker.io/axllent/mailpit:v1.33.0
+        env:
+          MP_SMTP_AUTH: "{{ __molecule_login_user }}:{{ __molecule_login_password }}"
+          MP_SMTP_REQUIRE_STARTTLS: "true"
+          MP_SMTP_TLS_CERT: "sans:{{ __molecule_login_relay }}"
+          MP_SMTP_TLS_KEY: "sans:{{ __molecule_login_relay }}"
+        networks:
+          - name: "{{ __molecule_network }}"
+        published_ports:
+          - 127.0.0.1:18026:8025
+        state: started
+
+    - name: Wait for the relays
+      ansible.builtin.uri:
+        url: "{{ item }}/api/v1/messages"
+      register: __molecule_relay_ready
+      until: __molecule_relay_ready['status'] == 200
+      retries: 30
+      delay: 1
+      loop:
+        - "{{ __molecule_relay_api }}"
+        - "{{ __molecule_login_relay_api }}"
+
+    # The CLI works with both Docker and Podman. The image build module needs buildx.
+    - name: Build test images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --build-arg
+          - "BASE_IMAGE={{ item['image'] }}"
+          - --tag
+          - "localhost/molecule-{{ item['name'] }}:latest"
+          - --file
+          - "{{ playbook_dir }}/Containerfile"
+          - "{{ playbook_dir }}"
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: false
+
+    - name: Start test containers
+      community.docker.docker_container:
+        name: "{{ item['name'] }}"
+        image: "localhost/molecule-{{ item['name'] }}:latest"
+        hostname: "{{ item['name'] }}"
+        command: sleep infinity
+        networks:
+          - name: "{{ __molecule_network }}"
+        state: started
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"

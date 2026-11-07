@@ -1,0 +1,17 @@
+{{ ansible_managed | comment }}
+defaults
+aliases /etc/aliases
+from {{ smtp_client_from }}
+tls {{ 'on' if smtp_client_tls | bool else 'off' }}
+tls_starttls {{ 'on' if smtp_client_starttls | bool else 'off' }}
+
+account default
+host {{ smtp_client_relay_host }}
+port {{ smtp_client_relay_port }}
+domain {{ smtp_client_helo_domain }}
+{% if smtp_client_relay_user is defined %}
+auth on
+{# msmtp strips the outer quotes and has no escape sequences, so these need none. #}
+user "{{ smtp_client_relay_user }}"
+password "{{ smtp_client_relay_password }}"
+{% endif %}

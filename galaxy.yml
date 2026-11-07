@@ -1,7 +1,7 @@
 ---
 namespace: pypb
 name: homelab
-version: 0.1.0
+version: 0.2.0
 readme: README.md
 authors:
   - pypb <24555025+pypb@users.noreply.github.com>

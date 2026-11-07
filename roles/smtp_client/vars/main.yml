@@ -1,0 +1,23 @@
+---
+__smtp_client_required_facts:
+  - fqdn
+  - os_family
+
+__smtp_client_packages: >-
+  {{ (['msmtp'] if smtp_client_install | bool else [])
+     + (['msmtp-mta'] if smtp_client_install_sendmail | bool else []) }}
+
+# Packages that are installed and provide an MTA, other than the one this role uses.
+__smtp_client_other_mtas: >-
+  {{ __smtp_client_dpkg['stdout_lines'] | default([])
+     | select('search', ' ok installed[|].*mail-transport-agent')
+     | map('regex_replace', '[|].*$', '')
+     | reject('eq', 'msmtp-mta')
+     | list }}
+
+__smtp_client_mta_conflict: "{{ __smtp_client_other_mtas | length > 0 and not smtp_client_remove_other_mta | bool }}"
+
+# The msmtp binary isn't setgid, so msmtp runs with the permissions of the user
+# sending the mail. A file without secrets must be readable by everyone for
+# those users to be able to send mail.
+__smtp_client_config_mode: "{{ '0640' if smtp_client_relay_password is defined else '0644' }}"

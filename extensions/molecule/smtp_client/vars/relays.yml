@@ -1,0 +1,10 @@
+---
+__molecule_network: molecule-smtp-client
+__molecule_relay: molecule-smtp-client-relay
+__molecule_relay_api: http://127.0.0.1:18025
+__molecule_login_relay: molecule-smtp-client-login-relay
+__molecule_login_relay_api: http://127.0.0.1:18026
+__molecule_login_user: molecule-user
+
+# Contains the characters most likely to break the quoting in msmtprc.
+__molecule_login_password: pa"ss\wo#rd

@@ -1,0 +1,127 @@
+---
+- name: Validate relay settings
+  ansible.builtin.assert:
+    that:
+      - smtp_client_relay_host is defined
+      - (smtp_client_relay_user is defined) == (smtp_client_relay_password is defined)
+    fail_msg: >-
+      smtp_client_relay_host is required when smtp_client_configure is true, and
+      smtp_client_relay_user and smtp_client_relay_password must be set together
+    quiet: true
+  when: smtp_client_configure | bool
+
+# msmtp refuses to read the whole file if one entry is invalid.
+- name: Validate aliases
+  ansible.builtin.assert:
+    that:
+      - item['key'] is match('^[^\\s:#@,]+$')
+      - item['value'] | default('', true) is not search('[:#]')
+    fail_msg: "Alias names must not contain whitespace or any of ':#@,', and addresses must not contain ':' or '#': {{ item['key'] }}"
+    quiet: true
+  loop: "{{ smtp_client_aliases | dict2items }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+  when: smtp_client_configure | bool
+
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when:
+    - smtp_client_configure | bool or __smtp_client_packages | length > 0
+    - __smtp_client_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+# Read directly from dpkg, because this has to work in check mode, and without
+# python3-apt. Every MTA provides this virtual package and conflicts with it.
+- name: Find other MTAs
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - --showformat=${Package}|${Status}|${Provides}\n
+  register: __smtp_client_dpkg
+  changed_when: false
+  check_mode: false
+  when:
+    - smtp_client_install_sendmail | bool
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Report other MTAs
+  ansible.builtin.debug:
+    msg: >-
+      {% if __smtp_client_mta_conflict %}Not setting up msmtp on {{ inventory_hostname }}, because
+      {{ __smtp_client_other_mtas | join(', ') }} would have to be replaced by msmtp-mta. Set
+      smtp_client_remove_other_mta to true to replace it, or smtp_client_install_sendmail to false
+      to keep it and use msmtp alongside it.{% else %}Replacing {{ __smtp_client_other_mtas | join(', ') }}
+      on {{ inventory_hostname }} with msmtp-mta.{% endif %}
+  when: __smtp_client_other_mtas | length > 0
+
+- name: Set up msmtp
+  when: not __smtp_client_mta_conflict
+  block:
+    # Skipped in check mode, where apt fails if python3-apt is missing. msmtp-mta
+    # replaces any other MTA in the same transaction. Removing it first instead would
+    # also remove the packages that depend on having an MTA, such as bsd-mailx.
+    - name: Install msmtp packages
+      ansible.builtin.apt:
+        name: "{{ __smtp_client_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when:
+        - __smtp_client_packages | length > 0
+        - ansible_facts['os_family'] == 'Debian'
+        - not ansible_check_mode
+
+    - name: Configure msmtp
+      when: smtp_client_configure | bool
+      block:
+        # Only the msmtp-mta package creates this group.
+        - name: Ensure the msmtp group exists
+          ansible.builtin.group:
+            name: msmtp
+            system: true
+            state: present
+
+        # msmtp fails to send if %M is used and this file is missing.
+        - name: Create /etc/mailname if missing
+          ansible.builtin.copy:
+            content: "{{ ansible_facts['fqdn'] }}\n"
+            dest: /etc/mailname
+            force: false
+            mode: "0644"
+            owner: root
+            group: root
+
+        # msmtp fails to send to a local recipient if this file is missing.
+        - name: Create /etc/aliases if missing
+          ansible.builtin.copy:
+            content: "# See aliases(5).\n"
+            dest: /etc/aliases
+            force: false
+            mode: "0644"
+            owner: root
+            group: root
+
+        # Replaces any existing entry, because msmtp treats duplicates as an error.
+        - name: Manage aliases
+          ansible.builtin.lineinfile:
+            path: /etc/aliases
+            regexp: "^\\s*{{ item['key'] | regex_escape }}\\s*:"
+            line: "{{ item['key'] }}: {{ item['value'] }}"
+            state: "{{ 'present' if item['value'] else 'absent' }}"
+            create: true
+            mode: "0644"
+            owner: root
+            group: root
+          loop: "{{ smtp_client_aliases | dict2items }}"
+          loop_control:
+            label: "{{ item['key'] }}"
+
+        - name: Template /etc/msmtprc
+          ansible.builtin.template:
+            src: msmtprc.j2
+            dest: /etc/msmtprc
+            mode: "{{ __smtp_client_config_mode }}"
+            owner: root
+            group: msmtp
+          diff: "{{ smtp_client_relay_password is not defined }}"

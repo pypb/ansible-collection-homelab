@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  role_name: smtp_client
+  namespace: pypb
+  author: pypb
+  description: Set up msmtp as the sendmail and SMTP client of a server.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - mail
+    - msmtp
+    - sendmail
+    - smtp
+dependencies: []

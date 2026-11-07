@@ -1,0 +1,16 @@
+==========================
+pypb.homelab Release Notes
+==========================
+
+.. contents:: Topics
+
+v0.2.0
+======
+
+Minor Changes
+-------------
+
+- restic_backup - add the role, migrated from the standalone ``pypb.restic_backup`` role.
+- restic_backup playbook - add a playbook that sets up rest-server users and restic backups.
+- restic_server_users - add a role that manages logins on a containerised rest-server.
+- smtp_client - add the role, which replaces the standalone ``pypb.msmtp`` role and adds mail aliases through ``smtp_client_aliases``. It no longer replaces other MTAs unless ``smtp_client_remove_other_mta`` is true. All variables now start with ``smtp_client_``, and ``install_msmtp_mta`` is now ``smtp_client_install_sendmail``.

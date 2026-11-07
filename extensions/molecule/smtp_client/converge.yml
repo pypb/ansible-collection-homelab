@@ -1,0 +1,45 @@
+---
+- name: Converge with a relay without TLS or login
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Install and configure msmtp
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_relay_host: "{{ __molecule_relay }}"
+        smtp_client_relay_port: 1025
+        smtp_client_tls: false
+        smtp_client_starttls: false
+        smtp_client_aliases:
+          root: aliased@example.com
+          retired: retired@example.com
+
+- name: Converge with another MTA installed
+  hosts: conflict
+  gather_facts: false
+  vars_files:
+    - vars/relays.yml
+  tasks:
+    - name: Leave the host alone because of the other MTA
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_relay_host: "{{ __molecule_relay }}"
+        smtp_client_relay_port: 1025
+        smtp_client_tls: false
+        smtp_client_starttls: false
+
+- name: Converge with everything turned off
+  hosts: disabled
+  gather_facts: false
+  tasks:
+    - name: Run the role without doing anything
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+      vars:
+        smtp_client_install: false
+        smtp_client_install_sendmail: false
+        smtp_client_configure: false
