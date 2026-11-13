@@ -1,0 +1,27 @@
+---
+- name: Prepare targets
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # The crypto modules can't run in check mode without it, and the role only
+    # installs packages outside check mode.
+    - name: Install python3-cryptography for the check mode run
+      ansible.builtin.apt:
+        name: python3-cryptography
+        update_cache: true
+
+    - name: Create a user for the application certificate
+      ansible.builtin.user:
+        name: app
+        system: true
+
+    # The role writes to existing directories only.
+    - name: Create certificate directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /srv/app/tls
+        - /srv/unifi/cert
+        - /srv/unifi/data

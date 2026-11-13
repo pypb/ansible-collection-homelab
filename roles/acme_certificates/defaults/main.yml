@@ -1,0 +1,62 @@
+---
+# Install what the role needs on the target: the trust store tools, the Python
+# libraries for the crypto and DNS modules, and the ssl-cert group. Debian family only.
+acme_certificates_install_packages: true
+acme_certificates_packages:
+  - ca-certificates
+  - python3-cryptography
+  - python3-dnspython
+  - ssl-cert
+
+# CA certificates to add to the system trust store, for example the root of a
+# private ACME CA. Each entry has a name and a PEM certificate, and optionally
+# state: absent to remove it again.
+acme_certificates_trusted_cas: []
+#  - name: Example Root CA
+#    certificate: |
+#      -----BEGIN CERTIFICATE-----
+#      ...
+acme_certificates_trust_dir: /usr/local/share/ca-certificates
+acme_certificates_trust_update_command:
+  - update-ca-certificates
+# Used instead when a CA was removed, so that the links to it are removed too.
+acme_certificates_trust_remove_command:
+  - update-ca-certificates
+  - --fresh
+
+# Certificates to request and install. See the README for the keys of each entry.
+acme_certificates_certificates: []
+#  - common_name: host.example.com
+#    subject_alt_names:
+#      - www.example.com
+#    fullchain_path: /etc/nginx/ssl/host.example.com.pem
+#    post_install_commands:
+#      - systemctl reload nginx
+
+# ACME server. Required when acme_certificates_certificates isn't empty.
+# acme_certificates_acme_directory: https://ca.example.com/acme/acme/directory
+acme_certificates_account_key_path: /etc/ssl/private/acme-account.key
+# acme_certificates_account_email: admin@example.com
+acme_certificates_terms_agreed: false
+acme_certificates_validate_certs: true
+
+# Renew certificates that expire within this many days.
+acme_certificates_remaining_days: 30
+
+# Default locations and permissions for keys and certificates.
+acme_certificates_key_dir: /etc/ssl/private
+acme_certificates_cert_dir: /etc/ssl/certs
+acme_certificates_owner: root
+acme_certificates_group: ssl-cert
+acme_certificates_key_mode: "0640"
+acme_certificates_cert_mode: "0644"
+acme_certificates_key_type: RSA
+acme_certificates_key_size: 4096
+
+# DNS server that accepts dynamic updates (RFC 2136) for the DNS-01 challenge.
+# acme_certificates_nsupdate_server: ns1.example.com
+acme_certificates_nsupdate_port: 53
+# acme_certificates_nsupdate_zone: example.com
+acme_certificates_nsupdate_key_name: ansible
+# acme_certificates_nsupdate_key_secret: "{{ vaulted_tsig_secret }}"
+acme_certificates_nsupdate_key_algorithm: hmac-sha256

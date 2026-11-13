@@ -1,0 +1,4 @@
+$TTL 60
+@   IN SOA ns.example.test. hostmaster.example.test. 1 60 60 3600 60
+    IN NS  ns.example.test.
+ns  IN A   127.0.0.1

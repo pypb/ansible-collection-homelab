@@ -1,0 +1,93 @@
+---
+- name: Validate ACME settings
+  ansible.builtin.assert:
+    that:
+      - acme_certificates_acme_directory | default('') | length > 0
+      - acme_certificates_nsupdate_server | default('') | length > 0
+      - acme_certificates_nsupdate_key_secret | default('') | length > 0
+    fail_msg: >-
+      acme_certificates_acme_directory, acme_certificates_nsupdate_server and
+      acme_certificates_nsupdate_key_secret are required when acme_certificates_certificates isn't empty
+    quiet: true
+  when: acme_certificates_certificates | length > 0
+
+- name: Validate certificates
+  ansible.builtin.assert:
+    that:
+      - __acme_certificates_item['common_name'] | default('') | length > 0
+      - >-
+        __acme_certificates_unifi | length == 0
+        or (__acme_certificates_unifi['path'] | default('') | length > 0 and __acme_certificates_chain_path | length > 0)
+    fail_msg: >-
+      Each certificate needs a common_name, and one with unifi_keystore needs
+      unifi_keystore.path and chain_path: {{ __acme_certificates_item['common_name'] | default(__acme_certificates_item) }}
+    quiet: true
+  loop: "{{ acme_certificates_certificates }}"
+  loop_control:
+    loop_var: __acme_certificates_item
+    label: "{{ __acme_certificates_item['common_name'] | default('') }}"
+
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: __acme_certificates_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+# Skipped in check mode, where apt fails if python3-apt is missing.
+- name: Install required packages
+  ansible.builtin.apt:
+    name: "{{ acme_certificates_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - acme_certificates_install_packages | bool
+    - acme_certificates_packages | length > 0
+    - ansible_facts['os_family'] == 'Debian'
+    - not ansible_check_mode
+
+# The CAs are trusted first, so that a private ACME server can be reached over HTTPS.
+- name: Manage trusted CAs
+  ansible.builtin.include_tasks: trust.yml
+  when: acme_certificates_trusted_cas | length > 0
+
+# In check mode on a new host, the packages that create the key directory aren't
+# installed yet, so the key and certificate tasks can't run.
+- name: Check for the account key directory
+  ansible.builtin.stat:
+    path: "{{ acme_certificates_account_key_path | dirname }}"
+  register: __acme_certificates_key_dir
+  when:
+    - acme_certificates_certificates | length > 0
+    - ansible_check_mode
+
+- name: Report skipped certificates
+  ansible.builtin.debug:
+    msg: >-
+      Not checking certificates on {{ inventory_hostname }} in check mode, because
+      {{ acme_certificates_account_key_path | dirname }} doesn't exist yet.
+  when:
+    - acme_certificates_certificates | length > 0
+    - ansible_check_mode
+    - not __acme_certificates_key_dir['stat']['exists']
+
+- name: Manage certificates
+  when:
+    - acme_certificates_certificates | length > 0
+    - not ansible_check_mode or __acme_certificates_key_dir['stat']['exists']
+  block:
+    - name: Create ACME account key
+      community.crypto.openssl_privatekey:
+        path: "{{ acme_certificates_account_key_path }}"
+        type: ECC
+        curve: secp256r1
+        owner: root
+        group: root
+        mode: "0600"
+      register: __acme_certificates_account_key
+
+    - name: Manage certificate
+      ansible.builtin.include_tasks: certificate.yml
+      loop: "{{ acme_certificates_certificates }}"
+      loop_control:
+        loop_var: __acme_certificates_item
+        label: "{{ __acme_certificates_item['common_name'] }}"

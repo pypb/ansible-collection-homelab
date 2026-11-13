@@ -1,0 +1,40 @@
+---
+- name: Create trust store directory
+  ansible.builtin.file:
+    path: "{{ acme_certificates_trust_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add trusted CA certificates
+  ansible.builtin.copy:
+    content: "{{ __acme_certificates_ca['certificate'] | trim }}\n"
+    dest: "{{ acme_certificates_trust_dir }}/{{ __acme_certificates_ca_file_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ __acme_certificates_cas | selectattr('state', 'eq', 'present') | list }}"
+  loop_control:
+    loop_var: __acme_certificates_ca
+    label: "{{ __acme_certificates_ca['name'] }}"
+  register: __acme_certificates_ca_added
+
+- name: Remove CA certificates
+  ansible.builtin.file:
+    path: "{{ acme_certificates_trust_dir }}/{{ __acme_certificates_ca_file_name }}"
+    state: absent
+  loop: "{{ __acme_certificates_cas | selectattr('state', 'eq', 'absent') | list }}"
+  loop_control:
+    loop_var: __acme_certificates_ca
+    label: "{{ __acme_certificates_ca['name'] }}"
+  register: __acme_certificates_ca_removed
+
+# Without --fresh, update-ca-certificates leaves the links to removed CAs behind.
+- name: Update the system trust store
+  ansible.builtin.command:
+    argv: >-
+      {{ acme_certificates_trust_remove_command if __acme_certificates_ca_removed is changed
+         else acme_certificates_trust_update_command }}
+  changed_when: true
+  when: __acme_certificates_ca_added is changed or __acme_certificates_ca_removed is changed

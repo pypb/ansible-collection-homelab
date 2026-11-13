@@ -9,6 +9,8 @@ migrated into `roles/`.
   - `smtp_client`: sets up msmtp as the sendmail and SMTP client of a server, sending mail through a relay
   - `restic_backup`: installs and configures restic and resticprofile
   - `restic_server_users`: manages logins on a containerised rest-server
+  - `acme_certificates`: trusts private CAs, and requests certificates from an ACME
+    server with DNS-01, installing them anywhere, including Unifi keystores
 - Playbooks:
   - `restic_backup`: combines both roles
 - Plugins: none yet
@@ -23,7 +25,8 @@ added.
 - Lint: `yamllint .`, `ansible-lint` and `ruff check .`
 - Sanity tests: `ansible-test sanity --docker default`
 - Molecule: run `molecule test --scenario-name <name>` from `extensions/`, with
-  `ANSIBLE_COLLECTIONS_PATH` covering this collection and `community.docker`.
+  `ANSIBLE_COLLECTIONS_PATH` covering this collection, `community.docker`,
+  `community.crypto` and `community.general`.
   With Podman, also start the API socket and set `DOCKER_HOST`
 - Changelog: add a fragment to `changelogs/fragments/`, then run
   `antsibull-changelog release` when releasing

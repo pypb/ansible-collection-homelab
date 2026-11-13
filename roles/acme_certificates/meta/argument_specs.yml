@@ -1,0 +1,221 @@
+---
+argument_specs:
+  main:
+    short_description: Trust private CAs, and request and install certificates from an ACME server.
+    description:
+      - Adds CA certificates to the system trust store, for example the root of a private ACME CA such as step-ca.
+      - Requests certificates from an ACME server with the DNS-01 challenge, using dynamic DNS updates (RFC 2136), and renews them before they expire.
+      - Writes keys and certificates to any path, can also write a Unifi Network controller keystore, and runs commands
+        such as service reloads when a certificate changes.
+    author:
+      - pypb
+    options:
+      acme_certificates_install_packages:
+        type: bool
+        default: true
+        description: Install C(acme_certificates_packages). Only done on the Debian family.
+      acme_certificates_packages:
+        type: list
+        elements: str
+        default: [ca-certificates, python3-cryptography, python3-dnspython, ssl-cert]
+        description: Packages the role needs on the target.
+      acme_certificates_trusted_cas:
+        type: list
+        elements: dict
+        default: []
+        description: CA certificates to add to, or remove from, the system trust store.
+        options:
+          name:
+            type: str
+            required: true
+            description: Name of the CA. The file in C(acme_certificates_trust_dir) is named after it.
+          certificate:
+            type: str
+            description: The CA certificate in PEM format. Required unless C(state) is C(absent).
+          state:
+            type: str
+            choices: [present, absent]
+            default: present
+            description: Whether the CA should be trusted.
+      acme_certificates_trust_dir:
+        type: path
+        default: /usr/local/share/ca-certificates
+        description: Directory the trusted CA certificates are written to.
+      acme_certificates_trust_update_command:
+        type: list
+        elements: str
+        default: [update-ca-certificates]
+        description: Command, as a list of arguments, that updates the system trust store after a CA is added.
+      acme_certificates_trust_remove_command:
+        type: list
+        elements: str
+        default: [update-ca-certificates, --fresh]
+        description: Command, as a list of arguments, that rebuilds the system trust store after a CA is removed.
+      acme_certificates_certificates:
+        type: list
+        elements: dict
+        default: []
+        description: Certificates to request and install.
+        options:
+          common_name:
+            type: str
+            required: true
+            description: Common name of the certificate. It is also added as a subject alternative name.
+          subject_alt_names:
+            type: list
+            elements: str
+            default: []
+            description: Other DNS names for the certificate.
+          name:
+            type: str
+            description: Base name of the default key and certificate files. Defaults to C(common_name).
+          key_path:
+            type: path
+            description: Private key. Defaults to C(<acme_certificates_key_dir>/<name>.key).
+          cert_path:
+            type: path
+            description: Certificate, without the chain. Defaults to C(<acme_certificates_cert_dir>/<name>.crt).
+          chain_path:
+            type: path
+            description: Intermediate certificates. Not written unless set. Required with C(unifi_keystore).
+          fullchain_path:
+            type: path
+            description: Certificate followed by the intermediate certificates. Not written unless set.
+          owner:
+            type: str
+            description: Owner of the key and certificate files. Defaults to C(acme_certificates_owner).
+          group:
+            type: str
+            description: Group of the key and certificate files. Defaults to C(acme_certificates_group).
+          key_mode:
+            type: str
+            description: Mode of the key file. Defaults to C(acme_certificates_key_mode).
+          cert_mode:
+            type: str
+            description: Mode of the certificate files. Defaults to C(acme_certificates_cert_mode).
+          key_type:
+            type: str
+            choices: [RSA, ECC, Ed25519, Ed448]
+            description: Type of the private key. Defaults to C(acme_certificates_key_type).
+          key_size:
+            type: int
+            description: Size of an RSA key. Defaults to C(acme_certificates_key_size).
+          key_curve:
+            type: str
+            description: Curve of an ECC key, such as C(secp256r1). Required when C(key_type) is C(ECC).
+          unifi_keystore:
+            type: dict
+            description: Also install the certificate in the keystore of a Unifi Network controller.
+            options:
+              path:
+                type: path
+                required: true
+                description: The keystore, C(<unifi data directory>/keystore).
+              owner:
+                type: str
+                description: Owner of the keystore. The controller must be able to read it.
+              group:
+                type: str
+                description: Group of the keystore.
+              mode:
+                type: str
+                default: "0640"
+                description: Mode of the keystore.
+              alias:
+                type: str
+                default: unifi
+                description: Alias of the key in the keystore.
+              password:
+                type: str
+                default: aircontrolenterprise
+                no_log: true
+                description: Password of the keystore.
+              backup:
+                type: bool
+                default: true
+                description: Keep a copy of the keystore when it is replaced.
+          post_install_commands:
+            type: list
+            elements: str
+            default: []
+            description:
+              - Shell commands to run, in order, when the key, the certificate or the Unifi keystore changes.
+              - For example C(systemctl reload nginx).
+      acme_certificates_acme_directory:
+        type: str
+        description: Directory URL of the ACME server. Required when C(acme_certificates_certificates) isn't empty.
+      acme_certificates_account_key_path:
+        type: path
+        default: /etc/ssl/private/acme-account.key
+        description: ACME account key. Created if missing.
+      acme_certificates_account_email:
+        type: str
+        description: Contact address for the ACME account.
+      acme_certificates_terms_agreed:
+        type: bool
+        default: false
+        description: Agree to the terms of service of the ACME server. Some servers, such as Let's Encrypt, require this.
+      acme_certificates_validate_certs:
+        type: bool
+        default: true
+        description: Validate the TLS certificate of the ACME server.
+      acme_certificates_remaining_days:
+        type: int
+        default: 30
+        description: Renew a certificate when it expires within this many days.
+      acme_certificates_key_dir:
+        type: path
+        default: /etc/ssl/private
+        description: Default directory for private keys.
+      acme_certificates_cert_dir:
+        type: path
+        default: /etc/ssl/certs
+        description: Default directory for certificates.
+      acme_certificates_owner:
+        type: str
+        default: root
+        description: Default owner of keys and certificates.
+      acme_certificates_group:
+        type: str
+        default: ssl-cert
+        description: Default group of keys and certificates.
+      acme_certificates_key_mode:
+        type: str
+        default: "0640"
+        description: Default mode of private keys.
+      acme_certificates_cert_mode:
+        type: str
+        default: "0644"
+        description: Default mode of certificates.
+      acme_certificates_key_type:
+        type: str
+        default: RSA
+        choices: [RSA, ECC, Ed25519, Ed448]
+        description: Default type of private keys.
+      acme_certificates_key_size:
+        type: int
+        default: 4096
+        description: Default size of RSA keys.
+      acme_certificates_nsupdate_server:
+        type: str
+        description: DNS server to send the challenge records to, by address or name. Required with certificates.
+      acme_certificates_nsupdate_port:
+        type: int
+        default: 53
+        description: Port of the DNS server.
+      acme_certificates_nsupdate_zone:
+        type: str
+        description: Zone to update. Looked up from the record name if not set.
+      acme_certificates_nsupdate_key_name:
+        type: str
+        default: ansible
+        description: Name of the TSIG key.
+      acme_certificates_nsupdate_key_secret:
+        type: str
+        no_log: true
+        description: Secret of the TSIG key. Required with certificates.
+      acme_certificates_nsupdate_key_algorithm:
+        type: str
+        default: hmac-sha256
+        choices: [hmac-md5, hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384, hmac-sha512]
+        description: Algorithm of the TSIG key.

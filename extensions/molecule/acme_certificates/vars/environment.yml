@@ -1,0 +1,24 @@
+---
+# Test values only. The TSIG secret is also in files/named.conf.
+__molecule_network: molecule-acme-certificates
+__molecule_ca: molecule-acme-ca
+__molecule_dns: molecule-acme-dns
+# step-ca's --resolver must be an address. With a name, resolving the name loops
+# back into the resolver and validation hangs.
+__molecule_subnet: 10.199.77.0/24
+__molecule_dns_ip: 10.199.77.53
+__molecule_ca_image: docker.io/smallstep/step-ca:0.28.4
+__molecule_dns_image: localhost/molecule-acme-dns:latest
+__molecule_zone: example.test
+__molecule_tsig_name: molecule
+__molecule_tsig_secret: ybQYiKBB7yzZFiWadBSghhjZEtObU+jKRgS4X9nUGb0=
+__molecule_acme_directory: https://molecule-acme-ca:9000/acme/acme/directory
+__molecule_platforms:
+  - name: acme-debian12
+    image: docker.io/library/debian:12
+  - name: acme-debian13
+    image: docker.io/library/debian:13
+  - name: acme-ubuntu2404
+    image: docker.io/library/ubuntu:24.04
+  - name: acme-ubuntu2604
+    image: docker.io/library/ubuntu:26.04

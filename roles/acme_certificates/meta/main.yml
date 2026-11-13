@@ -1,0 +1,24 @@
+---
+galaxy_info:
+  role_name: acme_certificates
+  namespace: pypb
+  author: pypb
+  description: Trust private CAs, and request and install certificates from an ACME server.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - acme
+    - certificates
+    - pki
+    - tls
+    - unifi
+dependencies: []

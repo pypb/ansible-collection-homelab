@@ -1,0 +1,14 @@
+---
+- name: Read the root certificate of the ACME server
+  ansible.builtin.import_playbook: read_root_ca.yml
+
+- name: Converge
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+    - vars/role.yml
+  tasks:
+    - name: Trust the CA and install certificates
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
