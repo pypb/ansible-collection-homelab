@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - acme_certificates - new role that trusts private CAs, and requests certificates
+    from an ACME server with the DNS-01 challenge and dynamic DNS updates. Certificates
+    can be written to any path and installed in a Unifi Network controller keystore,
+    and commands can run when they change.
+  - The collection now depends on community.crypto 3.1.1 or newer and community.general
+    9.0.0 or newer.

@@ -1,0 +1,328 @@
+---
+- name: Read the root certificate of the ACME server
+  ansible.builtin.import_playbook: read_root_ca.yml
+
+- name: Verify the installed certificates
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  vars:
+    __molecule_fqdn: "{{ inventory_hostname }}.{{ __molecule_zone }}"
+  tasks:
+    - name: Read the host certificate
+      community.crypto.x509_certificate_info:
+        path: /etc/ssl/certs/{{ __molecule_fqdn }}.crt
+      register: __molecule_host_cert_info
+
+    - name: Read the application certificate
+      community.crypto.x509_certificate_info:
+        path: /srv/app/tls/app.crt
+      register: __molecule_app_cert_info
+
+    - name: Check the certificates have the names and keys asked for
+      ansible.builtin.assert:
+        that:
+          - __molecule_host_cert_info['subject']['commonName'] == __molecule_fqdn
+          - __molecule_host_cert_info['subject_alt_name'] == ['DNS:' ~ __molecule_fqdn]
+          - __molecule_host_cert_info['public_key_type'] == 'RSA'
+          - __molecule_app_cert_info['subject_alt_name'] | sort == ['DNS:app.' ~ __molecule_fqdn, 'DNS:www.' ~ __molecule_fqdn]
+          - __molecule_app_cert_info['public_key_type'] == 'ECC'
+
+    - name: Read file details
+      ansible.builtin.stat:
+        path: "{{ item['path'] }}"
+      loop:
+        - {path: "/etc/ssl/private/{{ __molecule_fqdn }}.key", owner: root, group: ssl-cert, mode: "0640"}
+        - {path: "/etc/ssl/certs/{{ __molecule_fqdn }}.crt", owner: root, group: ssl-cert, mode: "0644"}
+        - {path: /srv/app/tls/app.key, owner: app, group: app, mode: "0600"}
+        - {path: /srv/app/tls/app.crt, owner: app, group: app, mode: "0644"}
+        - {path: /srv/app/tls/chain.crt, owner: app, group: app, mode: "0644"}
+        - {path: /srv/app/tls/fullchain.crt, owner: app, group: app, mode: "0644"}
+        - {path: /srv/unifi/data/keystore, owner: "999", group: "999", mode: "0640"}
+        - {path: /etc/ssl/private/acme-account.key, owner: root, group: root, mode: "0600"}
+      loop_control:
+        label: "{{ item['path'] }}"
+      register: __molecule_files
+
+    - name: Check file ownership and modes
+      ansible.builtin.assert:
+        that:
+          - item['item']['owner'] in [item['stat']['pw_name'] | default(''), item['stat']['uid'] | string]
+          - item['item']['group'] in [item['stat']['gr_name'] | default(''), item['stat']['gid'] | string]
+          - item['stat']['mode'] == item['item']['mode']
+        fail_msg: "{{ item['item']['path'] }} is {{ item['stat']['pw_name'] | default(item['stat']['uid']) }}:{{
+          item['stat']['gr_name'] | default(item['stat']['gid']) }} {{ item['stat']['mode'] }}"
+      loop: "{{ __molecule_files['results'] }}"
+      loop_control:
+        label: "{{ item['item']['path'] }}"
+
+    # Uses the system trust store, so this also checks that the root CA is trusted.
+    - name: Verify the certificate chain
+      ansible.builtin.command:
+        argv: [openssl, verify, -untrusted, /srv/app/tls/chain.crt, /srv/app/tls/app.crt]
+      changed_when: false
+
+    - name: Read the fullchain
+      ansible.builtin.slurp:
+        src: /srv/app/tls/fullchain.crt
+      register: __molecule_fullchain
+
+    - name: Check the fullchain holds the certificate and the intermediate
+      ansible.builtin.assert:
+        that:
+          - (__molecule_fullchain['content'] | b64decode).count('BEGIN CERTIFICATE') == 2
+
+    - name: Read the Unifi keystore
+      ansible.builtin.command:
+        argv: [openssl, pkcs12, -in, /srv/unifi/data/keystore, -passin, "pass:aircontrolenterprise", -nokeys]
+      register: __molecule_keystore
+      changed_when: false
+
+    - name: Read the Unifi certificate
+      ansible.builtin.slurp:
+        src: /srv/unifi/cert/cert.pem
+      register: __molecule_unifi_cert_slurp
+
+    - name: Check the keystore holds the certificate and chain under the unifi alias
+      ansible.builtin.assert:
+        that:
+          - "__molecule_keystore['stdout'] is search('friendlyName: unifi')"
+          - __molecule_keystore['stdout'].count('BEGIN CERTIFICATE') == 2
+          - (__molecule_unifi_cert_slurp['content'] | b64decode | trim) in __molecule_keystore['stdout']
+
+    - name: Count post-install command runs
+      ansible.builtin.command:
+        argv: [wc, -l, /srv/app/restarts.log, /srv/unifi/restarts.log]
+      register: __molecule_restarts
+      changed_when: false
+
+    - name: Check each post-install command ran once
+      ansible.builtin.assert:
+        that:
+          - __molecule_restarts['stdout'] is search('^\s*1 /srv/app/restarts.log', multiline=true)
+          - __molecule_restarts['stdout'] is search('^\s*1 /srv/unifi/restarts.log', multiline=true)
+
+- name: Check the challenge records were removed
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  tasks:
+    - name: Look up challenge records
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ __molecule_dns }}", dig, +short, "@127.0.0.1", TXT, "_acme-challenge.{{ item }}.{{ __molecule_zone }}"]
+      loop: "{{ groups['targets'] }}"
+      register: __molecule_dig
+      changed_when: false
+
+    - name: Check no challenge records are left
+      ansible.builtin.assert:
+        that:
+          - __molecule_dig['results'] | map(attribute='stdout') | select | list | length == 0
+
+- name: Verify changes to certificates and CAs
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+    - vars/role.yml
+  vars:
+    __molecule_fqdn: "{{ inventory_hostname }}.{{ __molecule_zone }}"
+  tasks:
+    - name: Read the certificates before the changes
+      community.crypto.x509_certificate_info:
+        path: "{{ item }}"
+      loop:
+        - /etc/ssl/certs/{{ __molecule_fqdn }}.crt
+        - /srv/app/tls/app.crt
+        - /srv/unifi/cert/cert.pem
+      register: __molecule_before
+
+    - name: Add a name to the application certificate
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+      vars:
+        acme_certificates_certificates:
+          - "{{ __molecule_host_cert }}"
+          - "{{ __molecule_app_cert | combine({'subject_alt_names': __molecule_app_names + ['api.' ~ __molecule_fqdn]}) }}"
+          - "{{ __molecule_unifi_cert }}"
+
+    - name: Read the certificates after adding a name
+      community.crypto.x509_certificate_info:
+        path: "{{ item }}"
+      loop:
+        - /etc/ssl/certs/{{ __molecule_fqdn }}.crt
+        - /srv/app/tls/app.crt
+        - /srv/unifi/cert/cert.pem
+      register: __molecule_renamed
+
+    - name: Count post-install command runs after adding a name
+      ansible.builtin.command:
+        argv: [wc, -l, /srv/app/restarts.log, /srv/unifi/restarts.log]
+      register: __molecule_restarts
+      changed_when: false
+
+    - name: Check only the application certificate was reissued
+      ansible.builtin.assert:
+        that:
+          - __molecule_renamed['results'][0]['serial_number'] == __molecule_before['results'][0]['serial_number']
+          - __molecule_renamed['results'][1]['serial_number'] != __molecule_before['results'][1]['serial_number']
+          - "'DNS:api.' ~ __molecule_fqdn in __molecule_renamed['results'][1]['subject_alt_name']"
+          - __molecule_renamed['results'][2]['serial_number'] == __molecule_before['results'][2]['serial_number']
+          - __molecule_restarts['stdout'] is search('^\s*2 /srv/app/restarts.log', multiline=true)
+          - __molecule_restarts['stdout'] is search('^\s*1 /srv/unifi/restarts.log', multiline=true)
+
+    - name: Renew certificates that expire within 100 days
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+      vars:
+        acme_certificates_remaining_days: 100
+
+    - name: Read the certificates after renewal
+      community.crypto.x509_certificate_info:
+        path: "{{ item }}"
+      loop:
+        - /etc/ssl/certs/{{ __molecule_fqdn }}.crt
+        - /srv/unifi/cert/cert.pem
+      register: __molecule_renewed
+
+    - name: Read the Unifi keystore after renewal
+      ansible.builtin.command:
+        argv: [openssl, pkcs12, -in, /srv/unifi/data/keystore, -passin, "pass:aircontrolenterprise", -nokeys]
+      register: __molecule_keystore
+      changed_when: false
+
+    - name: Read the renewed Unifi certificate
+      ansible.builtin.slurp:
+        src: /srv/unifi/cert/cert.pem
+      register: __molecule_unifi_cert_pem
+
+    - name: Find keystore backups
+      ansible.builtin.find:
+        paths: /srv/unifi/data
+        patterns: keystore.*
+      register: __molecule_backups
+
+    - name: Count post-install command runs after renewal
+      ansible.builtin.command:
+        argv: [wc, -l, /srv/unifi/restarts.log]
+      register: __molecule_restarts
+      changed_when: false
+
+    - name: Check the certificates and keystore were renewed
+      ansible.builtin.assert:
+        that:
+          - __molecule_renewed['results'][0]['serial_number'] != __molecule_before['results'][0]['serial_number']
+          - __molecule_renewed['results'][1]['serial_number'] != __molecule_before['results'][2]['serial_number']
+          - (__molecule_unifi_cert_pem['content'] | b64decode | trim) in __molecule_keystore['stdout']
+          - __molecule_backups['matched'] == 1
+          - __molecule_restarts['stdout'] is search('^\s*2 ')
+
+    - name: Remove the fullchain of the application certificate
+      ansible.builtin.file:
+        path: /srv/app/tls/fullchain.crt
+        state: absent
+
+    - name: Replace the missing fullchain
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+
+    - name: Read the fullchain details
+      ansible.builtin.stat:
+        path: /srv/app/tls/fullchain.crt
+      register: __molecule_fullchain_stat
+
+    - name: Check the fullchain was written again
+      ansible.builtin.assert:
+        that:
+          - __molecule_fullchain_stat['stat']['exists']
+          - __molecule_fullchain_stat['stat']['pw_name'] == 'app'
+
+    - name: Read the intermediate certificate
+      ansible.builtin.slurp:
+        src: /srv/app/tls/chain.crt
+      register: __molecule_chain
+
+    - name: Trust an extra CA
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+      vars:
+        acme_certificates_certificates: []
+        acme_certificates_trusted_cas:
+          - name: Molecule Root CA
+            certificate: "{{ hostvars['molecule-host']['__molecule_root_ca'] }}"
+          - name: Extra CA
+            certificate: "{{ __molecule_chain['content'] | b64decode }}"
+
+    - name: Read the extra CA in the trust store
+      ansible.builtin.stat:
+        path: /etc/ssl/certs/Extra-CA.pem
+      register: __molecule_extra_ca
+
+    - name: Check the extra CA is trusted
+      ansible.builtin.assert:
+        that:
+          - __molecule_extra_ca['stat']['exists']
+
+    - name: Remove the extra CA
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+      vars:
+        acme_certificates_certificates: []
+        acme_certificates_trusted_cas:
+          - name: Molecule Root CA
+            certificate: "{{ hostvars['molecule-host']['__molecule_root_ca'] }}"
+          - name: Extra CA
+            state: absent
+
+    - name: Read the extra CA files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/share/ca-certificates/Extra-CA.crt
+        - /etc/ssl/certs/Extra-CA.pem
+        - /etc/ssl/certs/Molecule-Root-CA.pem
+      register: __molecule_ca_files
+
+    - name: Check only the extra CA was removed
+      ansible.builtin.assert:
+        that:
+          - __molecule_ca_files['results'] | map(attribute='stat') | map(attribute='exists') | list == [false, false, true]
+
+    - name: Check validation rejects a missing ACME directory
+      block:
+        - name: Attempt to request a certificate without an ACME directory
+          ansible.builtin.include_role:
+            name: pypb.homelab.acme_certificates
+          vars:
+            acme_certificates_acme_directory: ""
+
+        - name: Fail if the missing ACME directory was accepted
+          ansible.builtin.fail:
+            msg: A configuration without an ACME directory was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate ACME settings')
+
+    - name: Check validation rejects a Unifi keystore without a chain
+      block:
+        - name: Attempt to install a Unifi keystore without a chain
+          ansible.builtin.include_role:
+            name: pypb.homelab.acme_certificates
+          vars:
+            acme_certificates_certificates:
+              - common_name: "unifi.{{ __molecule_fqdn }}"
+                unifi_keystore:
+                  path: /srv/unifi/data/keystore
+
+        - name: Fail if the Unifi keystore without a chain was accepted
+          ansible.builtin.fail:
+            msg: A Unifi keystore without a chain was accepted
+      rescue:
+        - name: Check the failure came from validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task['name'] is search('Validate certificates')

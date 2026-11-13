@@ -1,0 +1,50 @@
+---
+# Role variables shared by converge and verify. __molecule_root_ca is read from
+# the ACME server in converge.
+acme_certificates_trusted_cas:
+  - name: Molecule Root CA
+    certificate: "{{ hostvars['molecule-host']['__molecule_root_ca'] }}"
+acme_certificates_acme_directory: "{{ __molecule_acme_directory }}"
+acme_certificates_nsupdate_server: "{{ __molecule_dns }}"
+acme_certificates_nsupdate_zone: "{{ __molecule_zone }}"
+acme_certificates_nsupdate_key_name: "{{ __molecule_tsig_name }}"
+acme_certificates_nsupdate_key_secret: "{{ __molecule_tsig_secret }}"
+
+__molecule_host_cert:
+  common_name: "{{ inventory_hostname }}.{{ __molecule_zone }}"
+
+__molecule_app_names:
+  - "www.{{ inventory_hostname }}.{{ __molecule_zone }}"
+
+__molecule_app_cert:
+  common_name: "app.{{ inventory_hostname }}.{{ __molecule_zone }}"
+  subject_alt_names: "{{ __molecule_app_names }}"
+  key_type: ECC
+  key_curve: secp256r1
+  key_path: /srv/app/tls/app.key
+  cert_path: /srv/app/tls/app.crt
+  chain_path: /srv/app/tls/chain.crt
+  fullchain_path: /srv/app/tls/fullchain.crt
+  owner: app
+  group: app
+  key_mode: "0600"
+  post_install_commands:
+    - echo restarted >> /srv/app/restarts.log
+
+__molecule_unifi_cert:
+  common_name: "unifi.{{ inventory_hostname }}.{{ __molecule_zone }}"
+  name: unifi
+  key_path: /srv/unifi/cert/privkey.pem
+  cert_path: /srv/unifi/cert/cert.pem
+  chain_path: /srv/unifi/cert/chain.pem
+  unifi_keystore:
+    path: /srv/unifi/data/keystore
+    owner: "999"
+    group: "999"
+  post_install_commands:
+    - echo restarted >> /srv/unifi/restarts.log
+
+acme_certificates_certificates:
+  - "{{ __molecule_host_cert }}"
+  - "{{ __molecule_app_cert }}"
+  - "{{ __molecule_unifi_cert }}"

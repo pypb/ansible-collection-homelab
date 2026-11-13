@@ -1,0 +1,41 @@
+---
+__acme_certificates_required_facts:
+  - os_family
+
+# The trusted CAs, with the default state filled in.
+__acme_certificates_cas: >-
+  {% set cas = [] %}{% for ca in acme_certificates_trusted_cas %}{{
+  cas.append({'state': 'present'} | combine(ca)) }}{% endfor %}{{ cas }}
+
+# CA files are named after the CA, with characters that aren't safe in a file name replaced.
+__acme_certificates_ca_file_name: >-
+  {{ __acme_certificates_ca['name'] | regex_replace('[ /\\?%*:|"<>\x7f\x00-\x1f]', '-') }}.crt
+
+# The values below describe the certificate currently being processed,
+# __acme_certificates_item, with the role defaults filled in.
+__acme_certificates_name: "{{ __acme_certificates_item['name'] | default(__acme_certificates_item['common_name']) }}"
+__acme_certificates_names: >-
+  {{ ([__acme_certificates_item['common_name']] + __acme_certificates_item['subject_alt_names'] | default([])) | unique }}
+__acme_certificates_san: "{{ __acme_certificates_names | map('regex_replace', '^', 'DNS:') | list }}"
+__acme_certificates_key_path: >-
+  {{ __acme_certificates_item['key_path'] | default(acme_certificates_key_dir ~ '/' ~ __acme_certificates_name ~ '.key') }}
+__acme_certificates_cert_path: >-
+  {{ __acme_certificates_item['cert_path'] | default(acme_certificates_cert_dir ~ '/' ~ __acme_certificates_name ~ '.crt') }}
+__acme_certificates_chain_path: "{{ __acme_certificates_item['chain_path'] | default('') }}"
+__acme_certificates_fullchain_path: "{{ __acme_certificates_item['fullchain_path'] | default('') }}"
+__acme_certificates_cert_owner: "{{ __acme_certificates_item['owner'] | default(acme_certificates_owner) }}"
+__acme_certificates_cert_group: "{{ __acme_certificates_item['group'] | default(acme_certificates_group) }}"
+__acme_certificates_unifi: "{{ __acme_certificates_item['unifi_keystore'] | default({}) }}"
+
+# The certificate files the ACME module writes, for fixing their permissions.
+__acme_certificates_cert_files: >-
+  {{ [__acme_certificates_cert_path, __acme_certificates_chain_path, __acme_certificates_fullchain_path] | select | list }}
+
+# Reissue a valid certificate when it no longer matches the key or the names asked
+# for, or when a chain file asked for is missing. The ACME module only writes the
+# chain files when it gets a new certificate.
+__acme_certificates_force: >-
+  {{ __acme_certificates_key is changed
+     or __acme_certificates_stat['results'] | map(attribute='stat') | map(attribute='exists') | reject | list | length > 0
+     or (__acme_certificates_cert_info['public_key'] | default('') != __acme_certificates_key_info['public_key'] | default(''))
+     or (__acme_certificates_cert_info['subject_alt_name'] | default([]) | sort != __acme_certificates_san | sort) }}

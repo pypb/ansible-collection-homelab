@@ -1,0 +1,121 @@
+---
+# Containers are managed with the CLI, which works with both Docker and Podman.
+# With rootless Podman, exec can fail in containers created through its API.
+- name: Create test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  tasks:
+    - name: Create network
+      ansible.builtin.command:
+        argv: [docker, network, create, "--subnet={{ __molecule_subnet }}", "{{ __molecule_network }}"]
+      changed_when: true
+
+    - name: Build DNS server image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --tag
+          - "{{ __molecule_dns_image }}"
+          - --file
+          - "{{ playbook_dir }}/files/Containerfile.dns"
+          - "{{ playbook_dir }}/files"
+      changed_when: false
+
+    - name: Start DNS server
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --detach
+          - --name={{ __molecule_dns }}
+          - --network={{ __molecule_network }}
+          - --ip={{ __molecule_dns_ip }}
+          - "{{ __molecule_dns_image }}"
+          - -g
+          - -c
+          - /etc/bind/named.conf
+      changed_when: true
+
+    # step-ca checks the DNS-01 challenge records on the test DNS server.
+    - name: Start ACME server
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --detach
+          - --name={{ __molecule_ca }}
+          - --network={{ __molecule_network }}
+          - --env=DOCKER_STEPCA_INIT_NAME=Molecule
+          - --env=DOCKER_STEPCA_INIT_DNS_NAMES={{ __molecule_ca }}
+          - --env=DOCKER_STEPCA_INIT_ACME=true
+          - "{{ __molecule_ca_image }}"
+          - /bin/sh
+          - -c
+          - exec /usr/local/bin/step-ca --resolver {{ __molecule_dns_ip }}:53 --password-file $PWDPATH $CONFIGPATH
+      changed_when: true
+
+    - name: Wait for the ACME server to initialise
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ __molecule_ca }}", step, ca, health, --ca-url, "https://{{ __molecule_ca }}:9000", --root, /home/step/certs/root_ca.crt]
+      register: __molecule_ca_health
+      until: __molecule_ca_health is succeeded
+      retries: 30
+      delay: 1
+      changed_when: false
+
+    # The default of 24 hours is less than the renewal threshold, so every run would renew.
+    - name: Issue certificates for 90 days
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ __molecule_ca }}", step, ca, provisioner, update, acme, --x509-default-dur, 2160h, --x509-max-dur, 2160h]
+      changed_when: true
+
+    - name: Restart the ACME server to apply the configuration
+      ansible.builtin.command:
+        argv: [docker, restart, "{{ __molecule_ca }}"]
+      changed_when: true
+
+    - name: Wait for the ACME server to restart
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ __molecule_ca }}", step, ca, health, --ca-url, "https://{{ __molecule_ca }}:9000", --root, /home/step/certs/root_ca.crt]
+      register: __molecule_ca_health
+      until: __molecule_ca_health is succeeded
+      retries: 30
+      delay: 1
+      changed_when: false
+
+    - name: Build test images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --build-arg
+          - "BASE_IMAGE={{ item['image'] }}"
+          - --tag
+          - "localhost/molecule-{{ item['name'] }}:latest"
+          - --file
+          - "{{ playbook_dir }}/Containerfile"
+          - "{{ playbook_dir }}"
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: false
+
+    - name: Start test containers
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --detach
+          - --name={{ item['name'] }}
+          - --hostname={{ item['name'] }}
+          - --network={{ __molecule_network }}
+          - localhost/molecule-{{ item['name'] }}:latest
+          - sleep
+          - infinity
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: true

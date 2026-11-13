@@ -1,0 +1,3 @@
+FROM docker.io/internetsystemsconsortium/bind9:9.20
+COPY named.conf /etc/bind/named.conf
+COPY --chown=bind:bind example.test.zone /var/lib/bind/example.test.zone

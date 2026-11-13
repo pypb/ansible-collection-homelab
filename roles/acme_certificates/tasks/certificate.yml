@@ -1,0 +1,169 @@
+---
+# Tasks for one entry of acme_certificates_certificates, __acme_certificates_item.
+
+- name: Create private key for {{ __acme_certificates_item['common_name'] }}
+  community.crypto.openssl_privatekey:
+    path: "{{ __acme_certificates_key_path }}"
+    type: "{{ __acme_certificates_item['key_type'] | default(acme_certificates_key_type) }}"
+    size: "{{ __acme_certificates_item['key_size'] | default(acme_certificates_key_size) }}"
+    curve: "{{ __acme_certificates_item['key_curve'] | default(omit) }}"
+    owner: "{{ __acme_certificates_cert_owner }}"
+    group: "{{ __acme_certificates_cert_group }}"
+    mode: "{{ __acme_certificates_item['key_mode'] | default(acme_certificates_key_mode) }}"
+  register: __acme_certificates_key
+
+# In check mode, a key that doesn't exist yet isn't created, so nothing can be
+# read from it. The results are the key, then __acme_certificates_cert_files.
+- name: Check for the key and certificate files of {{ __acme_certificates_item['common_name'] }}
+  ansible.builtin.stat:
+    path: "{{ __acme_certificates_stat_item }}"
+    get_checksum: false
+  loop: "{{ [__acme_certificates_key_path] + __acme_certificates_cert_files }}"
+  loop_control:
+    loop_var: __acme_certificates_stat_item
+  register: __acme_certificates_stat
+
+- name: Read the private key of {{ __acme_certificates_item['common_name'] }}
+  community.crypto.openssl_privatekey_info:
+    path: "{{ __acme_certificates_key_path }}"
+  register: __acme_certificates_key_info
+  when: __acme_certificates_stat['results'][0]['stat']['exists']
+
+- name: Read the current certificate of {{ __acme_certificates_item['common_name'] }}
+  community.crypto.x509_certificate_info:
+    path: "{{ __acme_certificates_cert_path }}"
+  register: __acme_certificates_cert_info
+  when: __acme_certificates_stat['results'][1]['stat']['exists']
+
+- name: Request and install certificate for {{ __acme_certificates_item['common_name'] }}
+  when: __acme_certificates_stat['results'][0]['stat']['exists']
+  block:
+    - name: Create CSR for {{ __acme_certificates_item['common_name'] }}
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ __acme_certificates_key_path }}"
+        common_name: "{{ __acme_certificates_item['common_name'] }}"
+        subject_alt_name: "{{ __acme_certificates_san }}"
+      register: __acme_certificates_csr
+      changed_when: false
+      check_mode: false
+
+    - name: Start ACME order for {{ __acme_certificates_item['common_name'] }}
+      community.crypto.acme_certificate:
+        acme_directory: "{{ acme_certificates_acme_directory }}"
+        validate_certs: "{{ acme_certificates_validate_certs }}"
+        account_key_src: "{{ acme_certificates_account_key_path }}"
+        account_email: "{{ acme_certificates_account_email | default(omit) }}"
+        terms_agreed: "{{ acme_certificates_terms_agreed }}"
+        modify_account: true
+        challenge: dns-01
+        csr_content: "{{ __acme_certificates_csr['csr'] }}"
+        dest: "{{ __acme_certificates_cert_path }}"
+        chain_dest: "{{ __acme_certificates_chain_path or omit }}"
+        fullchain_dest: "{{ __acme_certificates_fullchain_path or omit }}"
+        remaining_days: "{{ acme_certificates_remaining_days }}"
+        force: "{{ __acme_certificates_force }}"
+      register: __acme_certificates_order
+
+    - name: Complete DNS-01 challenge for {{ __acme_certificates_item['common_name'] }}
+      when:
+        - __acme_certificates_order is changed
+        - not ansible_check_mode
+      block:
+        - name: Add DNS-01 challenge records for {{ __acme_certificates_item['common_name'] }}
+          community.general.nsupdate:
+            server: "{{ acme_certificates_nsupdate_server }}"
+            port: "{{ acme_certificates_nsupdate_port }}"
+            zone: "{{ acme_certificates_nsupdate_zone | default(omit) }}"
+            key_name: "{{ acme_certificates_nsupdate_key_name }}"
+            key_secret: "{{ acme_certificates_nsupdate_key_secret }}"
+            key_algorithm: "{{ acme_certificates_nsupdate_key_algorithm }}"
+            record: "{{ __acme_certificates_record['key'] }}."
+            type: TXT
+            ttl: 60
+            value: "{{ __acme_certificates_record['value'] | map('regex_replace', '^|$', '\"') | list }}"
+            state: present
+          loop: "{{ __acme_certificates_order['challenge_data_dns'] | dict2items }}"
+          loop_control:
+            loop_var: __acme_certificates_record
+            label: "{{ __acme_certificates_record['key'] }}"
+
+        - name: Finish ACME order for {{ __acme_certificates_item['common_name'] }}
+          community.crypto.acme_certificate:
+            acme_directory: "{{ acme_certificates_acme_directory }}"
+            validate_certs: "{{ acme_certificates_validate_certs }}"
+            account_key_src: "{{ acme_certificates_account_key_path }}"
+            account_email: "{{ acme_certificates_account_email | default(omit) }}"
+            terms_agreed: "{{ acme_certificates_terms_agreed }}"
+            modify_account: true
+            challenge: dns-01
+            csr_content: "{{ __acme_certificates_csr['csr'] }}"
+            dest: "{{ __acme_certificates_cert_path }}"
+            chain_dest: "{{ __acme_certificates_chain_path or omit }}"
+            fullchain_dest: "{{ __acme_certificates_fullchain_path or omit }}"
+            remaining_days: "{{ acme_certificates_remaining_days }}"
+            force: "{{ __acme_certificates_force }}"
+            data: "{{ __acme_certificates_order }}"
+          register: __acme_certificates_issued
+
+      always:
+        - name: Remove DNS-01 challenge records for {{ __acme_certificates_item['common_name'] }}
+          community.general.nsupdate:
+            server: "{{ acme_certificates_nsupdate_server }}"
+            port: "{{ acme_certificates_nsupdate_port }}"
+            zone: "{{ acme_certificates_nsupdate_zone | default(omit) }}"
+            key_name: "{{ acme_certificates_nsupdate_key_name }}"
+            key_secret: "{{ acme_certificates_nsupdate_key_secret }}"
+            key_algorithm: "{{ acme_certificates_nsupdate_key_algorithm }}"
+            record: "{{ __acme_certificates_record['key'] }}."
+            type: TXT
+            state: absent
+          loop: "{{ __acme_certificates_order['challenge_data_dns'] | dict2items }}"
+          loop_control:
+            loop_var: __acme_certificates_record
+            label: "{{ __acme_certificates_record['key'] }}"
+
+    - name: Set certificate file permissions for {{ __acme_certificates_item['common_name'] }}
+      ansible.builtin.file:
+        path: "{{ __acme_certificates_file }}"
+        owner: "{{ __acme_certificates_cert_owner }}"
+        group: "{{ __acme_certificates_cert_group }}"
+        mode: "{{ __acme_certificates_item['cert_mode'] | default(acme_certificates_cert_mode) }}"
+      loop: "{{ __acme_certificates_cert_files }}"
+      loop_control:
+        loop_var: __acme_certificates_file
+        index_var: __acme_certificates_file_index
+      # In check mode, files that are about to be written don't exist yet.
+      when: not ansible_check_mode or __acme_certificates_stat['results'][__acme_certificates_file_index + 1]['stat']['exists']
+
+    - name: Install Unifi keystore for {{ __acme_certificates_item['common_name'] }}
+      community.crypto.openssl_pkcs12:
+        path: "{{ __acme_certificates_unifi['path'] }}"
+        privatekey_path: "{{ __acme_certificates_key_path }}"
+        certificate_path: "{{ __acme_certificates_cert_path }}"
+        other_certificates: "{{ __acme_certificates_chain_path }}"
+        other_certificates_parse_all: true
+        friendly_name: "{{ __acme_certificates_unifi['alias'] | default('unifi') }}"
+        passphrase: "{{ __acme_certificates_unifi['password'] | default('aircontrolenterprise') }}"
+        encryption_level: compatibility2022
+        owner: "{{ __acme_certificates_unifi['owner'] | default(omit) }}"
+        group: "{{ __acme_certificates_unifi['group'] | default(omit) }}"
+        mode: "{{ __acme_certificates_unifi['mode'] | default('0640') }}"
+        backup: "{{ __acme_certificates_unifi['backup'] | default(true) }}"
+      register: __acme_certificates_keystore
+      when:
+        - __acme_certificates_unifi | length > 0
+        # In check mode, a certificate that is about to be issued can't be read yet.
+        - not ansible_check_mode or (__acme_certificates_stat['results'][1]['stat']['exists'] and __acme_certificates_order is not changed)
+
+    # The commands come from the user, who may use shell features in them.
+    - name: Run post-install commands for {{ __acme_certificates_item['common_name'] }}  # noqa: command-instead-of-shell
+      ansible.builtin.shell:
+        cmd: "{{ __acme_certificates_command }}"
+      loop: "{{ __acme_certificates_item['post_install_commands'] | default([]) }}"
+      loop_control:
+        loop_var: __acme_certificates_command
+      changed_when: true
+      when: >-
+        __acme_certificates_key is changed
+        or __acme_certificates_issued is changed
+        or __acme_certificates_keystore is changed

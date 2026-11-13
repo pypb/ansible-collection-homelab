@@ -6,7 +6,9 @@ Ansible roles and plugins for managing my homelab.
 
 - ansible-core 2.21 or newer
 - [`community.docker`](https://docs.ansible.com/ansible/latest/collections/community/docker/)
-  5.0.0 or newer, which is installed automatically with this collection
+  5.0.0 or newer, [`community.crypto`](https://docs.ansible.com/ansible/latest/collections/community/crypto/)
+  3.1.1 or newer and [`community.general`](https://docs.ansible.com/ansible/latest/collections/community/general/)
+  9.0.0 or newer, which are installed automatically with this collection
 
 ## Installation
 
@@ -25,6 +27,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.smtp_client`](roles/smtp_client/README.md) | Sets up msmtp as the sendmail and SMTP client of a server, with mail aliases | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
+| [`pypb.homelab.acme_certificates`](roles/acme_certificates/README.md) | Trusts private CAs, and requests certificates from an ACME server with DNS-01 and installs them anywhere, including Unifi keystores | Debian 12 and 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
 
@@ -71,10 +74,12 @@ cd extensions
 molecule test --scenario-name restic_server_users
 molecule test --scenario-name restic_backup
 molecule test --scenario-name smtp_client
+molecule test --scenario-name acme_certificates
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and
-`DOCKER_HOST` pointing to it. They also need this collection and `community.docker`
+`DOCKER_HOST` pointing to it, and the `docker` command, which can be Podman's. They also
+need this collection, `community.docker`, `community.crypto` and `community.general`
 on `ANSIBLE_COLLECTIONS_PATH`.
 
 Describe each change in a fragment under `changelogs/fragments/`, then generate

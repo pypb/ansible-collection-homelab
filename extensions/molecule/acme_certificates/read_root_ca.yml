@@ -1,0 +1,17 @@
+---
+- name: Read the root certificate of the ACME server
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  tasks:
+    - name: Read the root certificate
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ __molecule_ca }}", cat, /home/step/certs/root_ca.crt]
+      register: __molecule_root_ca_read
+      changed_when: false
+      check_mode: false
+
+    - name: Save the root certificate for the targets
+      ansible.builtin.set_fact:
+        __molecule_root_ca: "{{ __molecule_root_ca_read['stdout'] }}"
