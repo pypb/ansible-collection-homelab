@@ -1,0 +1,9 @@
+---
+minor_changes:
+  - server_baseline - new role for the basic configuration of a Debian or Ubuntu
+    server. It installs and purges packages, optionally points Ubuntu at an archive
+    mirror, sets the host's domain name in /etc/hosts and /etc/mailname, and can
+    write a static, immutable resolv.conf. It sets sysctl settings, the time zone,
+    the sudo password timeout, vim's mouse, /tmp as tmpfs and Ubuntu's motd-news,
+    writes the message of the day and login banners, and sets the kernel consoles
+    and the GRUB menu, or the consoles on a Raspberry Pi's kernel command line.

@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{% if __server_baseline_dns_search | length > 0 %}
+search {{ __server_baseline_dns_search | join(' ') }}
+{% endif %}
+{% for nameserver in server_baseline_nameservers %}
+nameserver {{ nameserver }}
+{% endfor %}
+{% if server_baseline_resolv_options | length > 0 %}
+options {{ server_baseline_resolv_options | join(' ') }}
+{% endif %}

@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# update-grub reads this after /etc/default/grub and the other files in its directory.
+{% if server_baseline_kernel_consoles | length > 0 %}
+# The kernel writes its messages to every console, but /dev/console, and with it
+# systemd's status, is the last one. The consoles set earlier are replaced.
+__server_baseline_args="$(echo "$GRUB_CMDLINE_LINUX" | sed -E 's/(^| )console=[^ ]*//g; s/^ +//')"
+GRUB_CMDLINE_LINUX="$__server_baseline_args"
+__server_baseline_args="$(echo "$GRUB_CMDLINE_LINUX_DEFAULT" | sed -E 's/(^| )console=[^ ]*//g; s/^ +//')"
+GRUB_CMDLINE_LINUX_DEFAULT="${__server_baseline_args:+$__server_baseline_args }{{ server_baseline_kernel_consoles | map('regex_replace', '^', 'console=') | join(' ') }}"
+unset __server_baseline_args
+{% endif %}
+{% if server_baseline_grub_timeout is not none %}
+GRUB_TIMEOUT={{ server_baseline_grub_timeout | int }}
+GRUB_TIMEOUT_STYLE=menu
+# Ubuntu's timeout after a boot that didn't finish.
+GRUB_RECORDFAIL_TIMEOUT={{ server_baseline_grub_timeout | int }}
+{% endif %}
+{% if server_baseline_grub_terminals | length > 0 %}
+GRUB_TERMINAL="{{ server_baseline_grub_terminals | join(' ') }}"
+{% if 'serial' in server_baseline_grub_terminals %}
+GRUB_SERIAL_COMMAND="{{ server_baseline_grub_serial_command }}"
+{% endif %}
+{% endif %}

@@ -1,0 +1,71 @@
+---
+- name: Look for the boot loader configuration
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/default/grub
+    - "{{ __server_baseline_pi_cmdline }}"
+  register: __server_baseline_boot
+
+- name: Configure GRUB
+  when: __server_baseline_boot['results'][0]['stat']['exists']
+  block:
+    - name: Create the GRUB configuration directory
+      ansible.builtin.file:
+        path: /etc/default/grub.d
+        owner: root
+        group: root
+        mode: "0755"
+        state: directory
+      when: __server_baseline_grub_managed | bool
+
+    # Read after the other files there, such as the cloud images' 50-cloudimg-settings.cfg.
+    - name: Write the GRUB settings
+      ansible.builtin.template:
+        src: grub.cfg.j2
+        dest: "{{ __server_baseline_grub_dropin }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Update GRUB
+      when: __server_baseline_grub_managed | bool
+
+    - name: Remove the GRUB settings
+      ansible.builtin.file:
+        path: "{{ __server_baseline_grub_dropin }}"
+        state: absent
+      notify: Update GRUB
+      when: not __server_baseline_grub_managed | bool
+
+# A Raspberry Pi without GRUB reads the kernel command line from a single line in a file.
+- name: Set the consoles on the Raspberry Pi kernel command line
+  when:
+    - not __server_baseline_boot['results'][0]['stat']['exists']
+    - __server_baseline_boot['results'][1]['stat']['exists']
+    - server_baseline_kernel_consoles | length > 0
+  block:
+    - name: Read the kernel command line
+      ansible.builtin.slurp:
+        src: "{{ __server_baseline_pi_cmdline }}"
+      register: __server_baseline_cmdline
+
+    - name: Write the kernel command line
+      ansible.builtin.copy:
+        content: "{{ (__args | reject('match', '^console=') | list + __consoles) | join(' ') }}\n"
+        dest: "{{ __server_baseline_pi_cmdline }}"
+        mode: preserve
+        backup: true
+      vars:
+        __args: "{{ (__server_baseline_cmdline['content'] | b64decode).split() }}"
+        __consoles: "{{ server_baseline_kernel_consoles | map('regex_replace', '^', 'console=') | list }}"
+
+- name: Report a boot loader the role can't configure
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} has neither /etc/default/grub nor {{ __server_baseline_pi_cmdline }},
+      so its consoles and boot menu aren't configured.
+  when:
+    - __server_baseline_results | rejectattr('stat.exists') | list | length == 2
+    - __server_baseline_grub_managed | bool
+  vars:
+    __server_baseline_results: "{{ __server_baseline_boot['results'] }}"

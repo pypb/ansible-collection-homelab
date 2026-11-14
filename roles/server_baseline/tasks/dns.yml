@@ -1,0 +1,86 @@
+---
+- name: Look for the NetworkManager and dhclient configuration directories
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/NetworkManager/conf.d
+    - /etc/dhcp/dhclient-enter-hooks.d
+  register: __server_baseline_dns_dirs
+
+# NetworkManager reads it when it next starts or reloads.
+- name: Stop NetworkManager from writing resolv.conf
+  ansible.builtin.copy:
+    src: networkmanager-dns.conf
+    dest: /etc/NetworkManager/conf.d/dns.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: __server_baseline_dns_dirs['results'][0]['stat']['exists']
+
+- name: Stop dhclient from writing resolv.conf
+  ansible.builtin.copy:
+    src: dhclient-disable-resolvconf
+    dest: /etc/dhcp/dhclient-enter-hooks.d/disable_resolvconf_update
+    owner: root
+    group: root
+    mode: "0644"
+  when: __server_baseline_dns_dirs['results'][1]['stat']['exists']
+
+- name: Purge the packages that write resolv.conf
+  ansible.builtin.apt:
+    name:
+      - openresolv
+      - resolvconf
+    state: absent
+    purge: true
+
+- name: Read resolv.conf
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: __server_baseline_resolv
+
+# On Ubuntu, it's a link to the systemd-resolved stub file.
+- name: Remove the resolv.conf link
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+  when: __server_baseline_resolv['stat']['islnk'] | default(false)
+
+- name: Check whether resolv.conf needs changes
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+  check_mode: true
+  register: __server_baseline_resolv_pending
+  when: not __server_baseline_resolv['stat']['islnk'] | default(false)
+
+# An immutable file can't be replaced, so the flag comes off only for a change, or
+# when it should stay off.
+- name: Remove the immutable flag from resolv.conf
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    attributes: -i
+  when:
+    - "'immutable' in __server_baseline_resolv['stat']['attributes'] | default([])"
+    - __server_baseline_resolv_pending is changed or not server_baseline_resolv_conf_immutable | bool
+
+- name: Write resolv.conf
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# In check mode, the file is still the link.
+- name: Make resolv.conf immutable
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    attributes: +i
+  when:
+    - server_baseline_resolv_conf_immutable | bool
+    - not (ansible_check_mode and __server_baseline_resolv['stat']['islnk'] | default(false))

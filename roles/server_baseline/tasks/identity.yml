@@ -1,0 +1,19 @@
+---
+# Only an existing line is changed. Hosts such as Proxmox VE need their name to
+# resolve to their real address, and have no 127.0.1.1 line. A container gets its
+# hosts file from its host.
+- name: Set the host's names for 127.0.1.1
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ __server_baseline_fqdn }} {{ inventory_hostname_short }}"
+    backrefs: true
+  when: not __server_baseline_lxc | bool
+
+- name: Write /etc/mailname
+  ansible.builtin.copy:
+    content: "{{ __server_baseline_fqdn }}\n"
+    dest: /etc/mailname
+    owner: root
+    group: root
+    mode: "0644"

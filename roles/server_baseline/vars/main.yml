@@ -1,0 +1,36 @@
+---
+__server_baseline_required_facts:
+  - distribution
+  - os_family
+  - virtualization_type
+  - virtualization_role
+
+__server_baseline_ubuntu: "{{ ansible_facts['distribution'] == 'Ubuntu' }}"
+__server_baseline_lxc: "{{ ansible_facts['virtualization_type'] == 'lxc' }}"
+
+__server_baseline_install: >-
+  {{ server_baseline_packages
+     + (server_baseline_ubuntu_packages if __server_baseline_ubuntu | bool else [])
+     + (['sudo'] if server_baseline_sudo_timestamp_timeout is not none else []) }}
+
+__server_baseline_purge: >-
+  {{ server_baseline_purged_packages
+     + (server_baseline_ubuntu_purged_packages if __server_baseline_ubuntu | bool else [])
+     + (server_baseline_vm_purged_packages if ansible_facts['virtualization_role'] == 'guest' else []) }}
+
+# In check mode, packages the run would install aren't there yet.
+__server_baseline_pending: "{{ ansible_check_mode and __server_baseline_install_result is changed }}"
+
+__server_baseline_fqdn: "{{ inventory_hostname_short }}.{{ server_baseline_domain }}"
+
+__server_baseline_dns_search: >-
+  {{ server_baseline_dns_search if server_baseline_dns_search is not none
+     else ([server_baseline_domain] if server_baseline_domain | length > 0 else []) }}
+
+__server_baseline_grub_managed: >-
+  {{ server_baseline_kernel_consoles | length > 0
+     or server_baseline_grub_timeout is not none
+     or server_baseline_grub_terminals | length > 0 }}
+
+__server_baseline_grub_dropin: /etc/default/grub.d/99-server-baseline.cfg
+__server_baseline_pi_cmdline: /boot/firmware/cmdline.txt

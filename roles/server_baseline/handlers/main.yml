@@ -1,0 +1,13 @@
+---
+# Applies only the role's file.
+- name: Apply the sysctl settings
+  ansible.builtin.command:
+    argv: [/usr/lib/systemd/systemd-sysctl, "/etc/sysctl.d/{{ server_baseline_sysctl_file }}"]
+  changed_when: true
+
+# Containers have no GRUB installed.
+- name: Update GRUB
+  ansible.builtin.command:
+    argv: [update-grub]
+    removes: /boot/grub/grub.cfg
+  changed_when: true
