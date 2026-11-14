@@ -1,0 +1,46 @@
+---
+platforms:
+  - name: upgrades-debian13
+    image: docker.io/library/debian:13
+  - name: upgrades-ubuntu2404
+    image: docker.io/library/ubuntu:24.04
+  - name: upgrades-ubuntu2604
+    image: docker.io/library/ubuntu:26.04
+
+provisioner:
+  name: ansible
+  inventory:
+    hosts:
+      controller:
+        hosts:
+          molecule-host:
+            ansible_connection: local
+            ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      targets:
+        hosts:
+          upgrades-debian13:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          upgrades-ubuntu2404:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          upgrades-ubuntu2604:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+  config_options:
+    defaults:
+      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+      host_key_checking: false
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - check
+    - converge
+    - idempotence
+    - verify
+    - destroy

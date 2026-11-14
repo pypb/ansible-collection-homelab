@@ -1,0 +1,16 @@
+---
+__unattended_upgrades_conf: /etc/apt/apt.conf.d/52unattended-upgrades-local
+
+__unattended_upgrades_settings: >-
+  {{ ({'Unattended-Upgrade::Mail': unattended_upgrades_mail} if unattended_upgrades_mail | length > 0 else {})
+     | combine({
+         'Unattended-Upgrade::MailReport': unattended_upgrades_mail_report,
+         'Unattended-Upgrade::Automatic-Reboot': unattended_upgrades_automatic_reboot | bool,
+         'Unattended-Upgrade::Automatic-Reboot-Time': unattended_upgrades_automatic_reboot_time,
+         'Unattended-Upgrade::Remove-Unused-Dependencies': unattended_upgrades_remove_unused_dependencies | bool,
+         'Unattended-Upgrade::SyslogEnable': unattended_upgrades_syslog | bool,
+       })
+     | combine(unattended_upgrades_settings) }}
+
+# Every value, with the lists flattened, as strings.
+__unattended_upgrades_values: "{{ __unattended_upgrades_settings.values() | list | flatten | map('string') | list }}"

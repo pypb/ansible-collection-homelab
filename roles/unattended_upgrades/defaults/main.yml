@@ -1,0 +1,30 @@
+---
+# Install and run unattended-upgrades every day. False stops it from running, but
+# leaves the package installed.
+unattended_upgrades_enabled: true
+
+# Update the package lists every day, which apt does even without upgrades.
+unattended_upgrades_update_package_lists: true
+
+# Where reports go, such as root. Needs a working sendmail or mail command. No mail
+# when empty.
+unattended_upgrades_mail: ""
+
+# When to send a report: always, only-on-error or on-change.
+unattended_upgrades_mail_report: on-change
+
+# Reboot when an upgrade needs it, at unattended_upgrades_automatic_reboot_time:
+# now, or a time such as 02:00.
+unattended_upgrades_automatic_reboot: false
+unattended_upgrades_automatic_reboot_time: now
+
+# Purge the packages that upgrades leave unneeded.
+unattended_upgrades_remove_unused_dependencies: false
+
+# Log to syslog as well as to /var/log/unattended-upgrades.
+unattended_upgrades_syslog: false
+
+# Other apt settings, by their full names, such as
+# Unattended-Upgrade::Automatic-Reboot-WithUsers. A list adds to the distribution's
+# list of the same name.
+unattended_upgrades_settings: {}

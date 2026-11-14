@@ -1,0 +1,13 @@
+// {{ ansible_managed }}
+{% macro quote(value) %}"{{ value | string | lower if value is boolean else value }}"{% endmacro %}
+{% for key, value in __unattended_upgrades_settings | dictsort %}
+{% if value is iterable and value is not string and value is not mapping %}
+{{ key }} {
+{% for element in value %}
+  {{ quote(element) }};
+{% endfor %}
+};
+{% else %}
+{{ key }} {{ quote(value) }};
+{% endif %}
+{% endfor %}
