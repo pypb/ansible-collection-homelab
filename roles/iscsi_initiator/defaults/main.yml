@@ -1,0 +1,42 @@
+---
+# Packages to install. multipath-tools is added when iscsi_initiator_multipathd is true.
+iscsi_initiator_packages:
+  - open-iscsi
+  - lsscsi
+
+# The initiator name, which targets use to recognise the host. Unset, it's the
+# distribution's prefix followed by the short host name, so it's stable across
+# reinstalls. An empty string keeps the name the package generated.
+# iscsi_initiator_name: iqn.2004-10.com.ubuntu:01:host1
+
+# Settings for /etc/iscsi/iscsid.conf. The node.* settings are also applied to the
+# node records of iscsi_initiator_targets, and take effect at the next login.
+# The defaults let sessions ride out a target that restarts for up to 10 minutes,
+# rather than failing I/O after 2.
+iscsi_initiator_iscsid_settings:
+  node.session.timeo.replacement_timeout: 600
+  node.session.initial_login_retry_max: 20
+
+# Start iscsid, and multipathd if enabled, and log in to the targets. False enables
+# them without starting them, and leaves the logins as they are, for example in a
+# container or an image.
+iscsi_initiator_start: true
+
+# Targets to discover, log in to, and log in to at boot.
+iscsi_initiator_targets: []
+#  - target: iqn.2000-01.com.example:storage.target0
+#    portal: 192.0.2.30
+#    port: 3260
+#    login: true
+#    auto_node_startup: true
+#    auto_portal_startup: true
+
+# SCSI vendors, as in /sys/block/sdX/device/vendor, whose disks get the command
+# timeout below, so that they wait for a target that restarts too.
+iscsi_initiator_device_vendors: []
+#  - LIO-ORG
+iscsi_initiator_device_timeout: 600
+
+# Run multipathd. When false, it's stopped and disabled if installed, because with
+# a single path it claims the disks without adding anything.
+iscsi_initiator_multipathd: false

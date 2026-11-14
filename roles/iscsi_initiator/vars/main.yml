@@ -1,0 +1,29 @@
+---
+__iscsi_initiator_required_facts:
+  - distribution
+  - os_family
+
+# The prefix the distribution's open-iscsi package uses.
+__iscsi_initiator_name_prefix: >-
+  {{ 'iqn.2004-10.com.ubuntu' if ansible_facts['distribution'] == 'Ubuntu' else 'iqn.1993-08.org.debian' }}
+
+__iscsi_initiator_name: >-
+  {{ iscsi_initiator_name | default(__iscsi_initiator_name_prefix ~ ':01:' ~ inventory_hostname_short) }}
+
+__iscsi_initiator_install: >-
+  {{ iscsi_initiator_packages + (['multipath-tools'] if iscsi_initiator_multipathd | bool else []) }}
+
+__iscsi_initiator_node_settings: >-
+  {{ iscsi_initiator_iscsid_settings | dict2items | selectattr('key', 'match', 'node\.') | list }}
+
+# Discovered targets, from the node records: "portal:port,tpgt target" per line.
+__iscsi_initiator_known: >-
+  {{ __iscsi_initiator_nodes['stdout_lines'] | map('split', ' ') | map('last') | list }}
+
+# The portal of the target in the loop variable __iscsi_initiator_target, as iscsiadm takes it.
+__iscsi_initiator_portal: >-
+  {{ __iscsi_initiator_target['portal'] }}:{{ __iscsi_initiator_target['port'] | default(3260) }}
+
+# In check mode, before open-iscsi is installed, its files, units and iscsiadm don't
+# exist yet, so the tasks that need them are skipped.
+__iscsi_initiator_pending: "{{ ansible_check_mode and __iscsi_initiator_install_result is changed }}"

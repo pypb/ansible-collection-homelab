@@ -1,0 +1,33 @@
+---
+# Purging cloud-init leaves the network configuration it wrote, but nothing would
+# update it any more. Only purge it from hosts with their own configuration.
+- name: Look for network configuration from cloud-init
+  ansible.builtin.stat:
+    path: /etc/netplan/50-cloud-init.yaml
+  register: __ubuntu_k3s_node_cloud_init_netplan
+  when: "'cloud-init' in __ubuntu_k3s_node_purge"
+
+- name: Check the network configuration doesn't come from cloud-init
+  ansible.builtin.assert:
+    that: not __ubuntu_k3s_node_cloud_init_netplan['stat']['exists']
+    fail_msg: >-
+      /etc/netplan/50-cloud-init.yaml was written by cloud-init. Replace it with your own
+      netplan file, or remove cloud-init from ubuntu_k3s_node_unneeded_packages.
+    quiet: true
+  when: "'cloud-init' in __ubuntu_k3s_node_purge"
+
+# Without autoremove, so that dependencies that are still wanted stay installed.
+- name: Purge packages a k3s node doesn't need
+  ansible.builtin.apt:
+    name: "{{ __ubuntu_k3s_node_purge }}"
+    state: absent
+    purge: true
+  when: __ubuntu_k3s_node_purge | length > 0
+
+- name: Install packages
+  ansible.builtin.apt:
+    name: "{{ __ubuntu_k3s_node_install }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: __ubuntu_k3s_node_install | length > 0

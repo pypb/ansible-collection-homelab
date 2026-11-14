@@ -1,0 +1,31 @@
+---
+__ubuntu_k3s_node_required_facts:
+  - distribution
+
+__ubuntu_k3s_node_server_dir: "{{ ubuntu_k3s_node_data_dir }}/server"
+
+__ubuntu_k3s_node_install: >-
+  {{ ubuntu_k3s_node_packages
+     + (['cachefilesd'] if ubuntu_k3s_node_cachefilesd | bool else []) }}
+
+__ubuntu_k3s_node_purge: >-
+  {{ ubuntu_k3s_node_conflicting_packages + ubuntu_k3s_node_unneeded_packages }}
+
+# Unit name of the watchdog for the path in the loop variable __ubuntu_k3s_node_path.
+# systemd unit names can't hold every character of a path. The name is the one
+# k8s_prereqs used, so existing units are taken over rather than duplicated.
+__ubuntu_k3s_node_watchdog_unit: "iscsi-mount-repair-{{ __ubuntu_k3s_node_path | regex_replace('[^A-Za-z0-9._-]', '_') }}"
+
+__ubuntu_k3s_node_psa:
+  apiVersion: apiserver.config.k8s.io/v1
+  kind: AdmissionConfiguration
+  plugins:
+    - name: PodSecurity
+      configuration:
+        apiVersion: pod-security.admission.config.k8s.io/v1
+        kind: PodSecurityConfiguration
+        defaults: "{{ ubuntu_k3s_node_psa_defaults }}"
+        exemptions:
+          usernames: []
+          runtimeClasses: []
+          namespaces: "{{ ubuntu_k3s_node_psa_exempt_namespaces }}"

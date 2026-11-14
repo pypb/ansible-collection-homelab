@@ -1,0 +1,224 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: __ocfs2_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - ocfs2_cluster_name is defined
+      - ocfs2_cluster_name is match('^[A-Za-z0-9_]{1,16}$')
+      - ocfs2_nodes | length > 0
+      - ocfs2_nodes | rejectattr('name', 'defined') | list | length == 0
+      - ocfs2_nodes | rejectattr('number', 'defined') | list | length == 0
+      - ocfs2_nodes | rejectattr('ip_address', 'defined') | list | length == 0
+      - __ocfs2_node_names | unique | length == __ocfs2_node_names | length
+      - __ocfs2_node_numbers | unique | length == __ocfs2_node_numbers | length
+      - __ocfs2_node_numbers | select('lt', 0) | list | length == 0
+      - __ocfs2_node_numbers | select('gt', 254) | list | length == 0
+      - ocfs2_mounts | rejectattr('path', 'defined') | list | length == 0
+      - ocfs2_mounts | rejectattr('src', 'defined') | list | length == 0
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. ocfs2_cluster_name must be 1 to 16 letters, digits or underscores.
+      ocfs2_nodes must list at least one node, each with a unique name,
+      a unique number from 0 to 254 and an ip_address. Each of ocfs2_mounts
+      needs a path and a src.
+    quiet: true
+
+# o2cb only joins the cluster if it finds its own host name in cluster.conf.
+- name: Check this node is in the cluster
+  ansible.builtin.assert:
+    that: ansible_facts['nodename'] in __ocfs2_node_names
+    fail_msg: >-
+      {{ ansible_facts['nodename'] }}, the host name of this node, isn't a name in
+      ocfs2_nodes.
+    quiet: true
+
+- name: Install ocfs2-tools
+  ansible.builtin.apt:
+    name: ocfs2-tools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# Minimal Debian installs don't have it.
+- name: Create the sysctl directory
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+
+# OCFS2 fences a node by panicking it.
+- name: Write the fencing sysctl settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/95-ocfs2.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the OCFS2 sysctl settings
+
+- name: Check the kernel module
+  when: ocfs2_start | bool
+  block:
+    - name: List the installed kernels
+      ansible.builtin.command:
+        argv: [linux-version, list]
+      register: __ocfs2_kernels
+      changed_when: false
+      check_mode: false
+
+    # The running kernel, and the newest one, which is the one the next boot uses.
+    - name: Look for the OCFS2 module in the running and next kernel
+      ansible.builtin.command:
+        argv: [modinfo, -k, "{{ item }}", -n, ocfs2]
+      loop: "{{ [ansible_facts['kernel'], __ocfs2_kernels['stdout_lines'] | community.general.version_sort | last] | unique }}"
+      register: __ocfs2_module
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # On Ubuntu's generic kernels, the module is in the extra modules package.
+    # Debian's kernels and Ubuntu's Raspberry Pi kernels include it.
+    - name: Install the extra kernel modules that include OCFS2
+      ansible.builtin.apt:
+        name: "{{ __ocfs2_missing | map('regex_replace', '^', 'linux-modules-extra-') | list }}"
+        state: present
+      when:
+        - ansible_facts['distribution'] == 'Ubuntu'
+        - __ocfs2_missing | length > 0
+
+    - name: Look for the OCFS2 module again
+      ansible.builtin.command:
+        argv: [modinfo, -k, "{{ item }}", -n, ocfs2]
+      loop: "{{ __ocfs2_missing }}"
+      register: __ocfs2_module_again
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: not ansible_check_mode or ansible_facts['distribution'] != 'Ubuntu'
+
+    - name: Check the OCFS2 module is available
+      ansible.builtin.assert:
+        that: __ocfs2_module_again['results'] | selectattr('rc', 'defined') | selectattr('rc', 'ne', 0) | list | length == 0
+        fail_msg: >-
+          The kernels {{ __ocfs2_module_again['results'] | selectattr('rc', 'defined') | selectattr('rc', 'ne', 0)
+          | map(attribute='item') | join(', ') }} have no ocfs2 module.
+        quiet: true
+
+- name: Create the OCFS2 configuration directory
+  ansible.builtin.file:
+    path: /etc/ocfs2
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+
+- name: Write the cluster configuration
+  ansible.builtin.template:
+    src: cluster.conf.j2
+    dest: /etc/ocfs2/cluster.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: __ocfs2_conf
+
+- name: Configure o2cb
+  ansible.builtin.lineinfile:
+    path: /etc/default/o2cb
+    regexp: "^#?\\s*{{ item['key'] }}="
+    line: "{{ item['key'] }}={{ item['value'] }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {key: O2CB_ENABLED, value: "true"}
+    - {key: O2CB_BOOTCLUSTER, value: "{{ ocfs2_cluster_name }}"}
+    - {key: O2CB_HEARTBEAT_THRESHOLD, value: "{{ ocfs2_heartbeat_threshold }}"}
+    - {key: O2CB_IDLE_TIMEOUT_MS, value: "{{ ocfs2_idle_timeout_ms }}"}
+    - {key: O2CB_KEEPALIVE_DELAY_MS, value: "{{ ocfs2_keepalive_delay_ms }}"}
+    - {key: O2CB_RECONNECT_DELAY_MS, value: "{{ ocfs2_reconnect_delay_ms }}"}
+  loop_control:
+    label: "{{ item['key'] }}"
+  register: __ocfs2_o2cb_default
+
+# An OCFS2 file system mounted at boot needs both. The role never restarts
+# them: o2cb can't stop while a file system is mounted.
+- name: Enable and start the cluster stack
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - o2cb
+    - ocfs2
+  register: __ocfs2_o2cb_service
+  when: ocfs2_start | bool
+
+- name: Report configuration that waits for the cluster stack to restart
+  ansible.builtin.debug:
+    msg: >-
+      The OCFS2 cluster stack on {{ inventory_hostname }} keeps its old configuration
+      until it restarts, which in practice means a reboot. Reboot the nodes one at a
+      time. When adding a node, reboot the existing nodes before starting it.
+  when:
+    - ocfs2_start | bool
+    - __ocfs2_conf is changed or __ocfs2_o2cb_default is changed
+    - __ocfs2_o2cb_service['results'][0] is not changed
+
+- name: Add the OCFS2 file systems to fstab
+  ansible.posix.mount:
+    path: "{{ __ocfs2_mount['path'] }}"
+    src: "{{ __ocfs2_mount['src'] }}"
+    fstype: ocfs2
+    opts: "{{ __ocfs2_mount_opts }}"
+    dump: "0"
+    passno: "0"
+    state: present
+  loop: "{{ ocfs2_mounts }}"
+  loop_control:
+    loop_var: __ocfs2_mount
+    label: "{{ __ocfs2_mount['path'] }}"
+  register: __ocfs2_fstab
+
+# Starts the automount unit, or the mount unit when the entry isn't noauto. An entry
+# with only noauto is left to mount by hand. In check mode, a new entry has no unit yet.
+- name: Start the OCFS2 mounts
+  when: ocfs2_start | bool
+  block:
+    # Not a handler, because the units below need it in the same run.
+    - name: Reload systemd to read fstab  # noqa: no-handler
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: __ocfs2_fstab is changed
+
+    - name: Find the unit names of the mounts
+      ansible.builtin.command:
+        argv:
+          - systemd-escape
+          - --path
+          - "--suffix={{ 'automount' if 'x-systemd.automount' in __opts else 'mount' }}"
+          - "{{ item['__ocfs2_mount']['path'] }}"
+      loop: "{{ __ocfs2_fstab['results'] }}"
+      loop_control:
+        label: "{{ item['__ocfs2_mount']['path'] }}"
+      vars:
+        __opts: "{{ item['__ocfs2_mount']['opts'] | default(ocfs2_mount_opts) }}"
+      register: __ocfs2_mount_units
+      changed_when: false
+      check_mode: false
+      when: "'x-systemd.automount' in __opts or 'noauto' not in __opts.split(',')"
+
+    - name: Start the mount units
+      ansible.builtin.systemd_service:
+        name: "{{ item['stdout'] }}"
+        state: started
+      loop: "{{ __ocfs2_mount_units['results'] | selectattr('stdout', 'defined') }}"
+      loop_control:
+        label: "{{ item['stdout'] }}"
+      when: not (ansible_check_mode and item['item'] is changed)

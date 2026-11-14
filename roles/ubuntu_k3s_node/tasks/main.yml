@@ -1,0 +1,32 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: __ubuntu_k3s_node_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ubuntu_k3s_node_cilium_modules | intersect(ubuntu_k3s_node_blacklisted_modules) | length == 0
+        or not ubuntu_k3s_node_cilium | bool
+      - ubuntu_k3s_node_mount_watchdog_paths | reject('match', '^/[^\\s\"''%\\\\]*$') | length == 0
+    fail_msg: >-
+      This role supports Ubuntu only. ubuntu_k3s_node_blacklisted_modules must not
+      contain any of ubuntu_k3s_node_cilium_modules when ubuntu_k3s_node_cilium is true.
+      ubuntu_k3s_node_mount_watchdog_paths must be absolute, without whitespace, quotes,
+      % or backslashes.
+    quiet: true
+
+- name: Manage packages
+  ansible.builtin.include_tasks: packages.yml
+
+- name: Configure the kernel and units
+  ansible.builtin.include_tasks: system.yml
+
+- name: Configure storage and DNS
+  ansible.builtin.include_tasks: storage.yml
+
+- name: Configure the k3s server
+  ansible.builtin.include_tasks: server.yml
+  when: ubuntu_k3s_node_server | bool

@@ -1,0 +1,83 @@
+---
+- name: Verify an iSCSI initiator
+  hosts: targets
+  gather_facts: true
+  gather_subset: [min]
+  tasks:
+    - name: Read the initiator files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/iscsi/initiatorname.iscsi
+        - /etc/iscsi/iscsid.conf
+        - /etc/udev/rules.d/99-iscsi-timeout.rules
+      register: __molecule_files
+
+    - name: Read the node record
+      ansible.builtin.command:
+        argv: [iscsiadm, --mode, node, --targetname, iqn.2000-01.org.example:molecule.disk, --portal, "127.0.0.1:3260"]
+      register: __molecule_record
+      changed_when: false
+
+    - name: Read the multipathd and iscsid states
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, multipathd.service, multipathd.socket, iscsid.service, open-iscsi.service]
+      register: __molecule_units
+      changed_when: false
+      failed_when: false
+
+    - name: Read whether multipathd runs
+      ansible.builtin.command:
+        argv: [systemctl, is-active, multipathd.service, multipathd.socket]
+      register: __molecule_multipathd_active
+      changed_when: false
+      failed_when: false
+
+    - name: Check the initiator
+      ansible.builtin.assert:
+        that:
+          - __name is search('^InitiatorName=' ~ __prefix ~ ':01:' ~ inventory_hostname ~ '$', multiline=true)
+          - __iscsid is search('^node.session.timeo.replacement_timeout = 600$', multiline=true)
+          - __iscsid is search('^node.session.initial_login_retry_max = 20$', multiline=true)
+          - __rules is search('ATTR\{device/vendor\}=="LIO-ORG", ATTR\{device/timeout\}="600"')
+          - __rules is search('ATTR\{device/vendor\}=="IET"')
+          # The record was discovered with the package's 120 seconds, before the role ran.
+          - __molecule_record['stdout'] is search('^node.session.timeo.replacement_timeout = 600$', multiline=true)
+          - __molecule_record['stdout'] is search('^node.startup = automatic$', multiline=true)
+          # Newer packages ship the socket as a static unit.
+          - __molecule_units['stdout_lines'][0] == 'disabled'
+          - __molecule_units['stdout_lines'][1] in ['disabled', 'static']
+          - __molecule_multipathd_active['stdout_lines'] == ['inactive', 'inactive']
+          - __molecule_units['stdout_lines'][2:] == ['enabled', 'enabled']
+      vars:
+        __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+        __name: "{{ __contents[0] }}"
+        __iscsid: "{{ __contents[1] }}"
+        __rules: "{{ __contents[2] }}"
+        __prefix: "{{ 'iqn.2004-10.com.ubuntu' if ansible_facts['distribution'] == 'Ubuntu' else 'iqn.1993-08.org.debian' }}"
+
+    - name: Turn multipathd on, and the disk timeout off
+      ansible.builtin.include_role:
+        name: pypb.homelab.iscsi_initiator
+      vars:
+        iscsi_initiator_start: false
+        iscsi_initiator_multipathd: true
+
+    # multipathd doesn't run in containers, so only its unit is checked.
+    - name: Read the multipathd state
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, multipathd.service]
+      register: __molecule_multipathd
+      changed_when: false
+      failed_when: false
+
+    - name: Look for the udev rule
+      ansible.builtin.stat:
+        path: /etc/udev/rules.d/99-iscsi-timeout.rules
+      register: __molecule_rule
+
+    - name: Check multipathd is enabled and the rule was removed
+      ansible.builtin.assert:
+        that:
+          - __molecule_multipathd['stdout'] == 'enabled'
+          - not __molecule_rule['stat']['exists']

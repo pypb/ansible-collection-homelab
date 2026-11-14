@@ -1,0 +1,65 @@
+---
+# One node at a time, and stop at the first failure, so that a change that breaks a
+# node never reaches the next one. It defaults to the k3s_nodes group, never to all.
+- name: Prepare k3s nodes one at a time
+  hosts: "{{ ubuntu_k3s_node_hosts | default('k3s_nodes') }}"
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  tasks:
+    # The storage first: OCFS2 needs the iSCSI disks, and the node role's
+    # watchdogs need the OCFS2 mounts.
+    - name: Set up the iSCSI initiator
+      ansible.builtin.include_role:
+        name: pypb.homelab.iscsi_initiator
+      when: ubuntu_k3s_node_iscsi | default(false) | bool
+
+    - name: Set up OCFS2
+      ansible.builtin.include_role:
+        name: pypb.homelab.ocfs2
+      when: ubuntu_k3s_node_ocfs2 | default(false) | bool
+
+    - name: Prepare the node
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+
+    - name: Apply changes before checking the node
+      ansible.builtin.meta: flush_handlers
+
+    - name: Reboot the node
+      ansible.builtin.reboot:
+      when: ubuntu_k3s_node_reboot | default(false) | bool
+
+    # The playbook can run before k3s is installed: then there is nothing to wait for.
+    - name: Check whether k3s is installed
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - --property=LoadState
+          - --value
+          - "{{ ubuntu_k3s_node_k3s_service | default('k3s.service') }}"
+      register: __ubuntu_k3s_node_k3s_unit
+      changed_when: false
+      check_mode: false
+      when: ubuntu_k3s_node_server | default(false) | bool
+
+    # Read-only, so it also runs in check mode. Agents have no kubeconfig.
+    - name: Wait for the node to be Ready
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - wait
+          - --for=condition=Ready
+          - "node/{{ ubuntu_k3s_node_name | default(ansible_facts['nodename']) }}"
+          - --timeout=30s
+      register: __ubuntu_k3s_node_ready
+      until: __ubuntu_k3s_node_ready is succeeded
+      retries: 20
+      delay: 15
+      changed_when: false
+      check_mode: false
+      when:
+        - ubuntu_k3s_node_server | default(false) | bool
+        - __ubuntu_k3s_node_k3s_unit['stdout'] == 'loaded'

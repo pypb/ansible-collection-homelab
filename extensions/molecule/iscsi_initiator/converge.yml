@@ -1,0 +1,16 @@
+---
+- name: Converge an iSCSI initiator
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up the initiator
+      ansible.builtin.include_role:
+        name: pypb.homelab.iscsi_initiator
+      vars:
+        # iscsid doesn't run in a user namespace, and logins need the iscsi_tcp
+        # kernel module.
+        iscsi_initiator_start: false
+        iscsi_initiator_device_vendors: [LIO-ORG, IET]
+        iscsi_initiator_targets:
+          - target: iqn.2000-01.org.example:molecule.disk
+            portal: 127.0.0.1

@@ -1,0 +1,59 @@
+---
+platforms:
+  - name: k3s-node-ubuntu2404
+    image: docker.io/library/ubuntu:24.04
+  - name: k3s-node-ubuntu2604
+    image: docker.io/library/ubuntu:26.04
+  - name: k3s-node-cloud-init
+    image: docker.io/library/ubuntu:24.04
+
+provisioner:
+  name: ansible
+  inventory:
+    group_vars:
+      all:
+        # Settings that are per network namespace, so the test doesn't change the
+        # kernel of the machine it runs on. vm.overcommit_memory isn't.
+        ubuntu_k3s_node_sysctl:
+          net.ipv4.tcp_keepalive_time: 600
+        ocfs2_sysctl:
+          net.ipv4.tcp_fin_timeout: 30
+        # cachefilesd needs a kernel module the container can't rely on.
+        ubuntu_k3s_node_cachefilesd: false
+    hosts:
+      controller:
+        hosts:
+          molecule-host:
+            ansible_connection: local
+            ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      targets:
+        hosts:
+          k3s-node-ubuntu2404:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          k3s-node-ubuntu2604:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+      cloud_init:
+        hosts:
+          k3s-node-cloud-init:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+  config_options:
+    defaults:
+      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+      host_key_checking: false
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - prepare
+    - check
+    - converge
+    - idempotence
+    - verify
+    - destroy

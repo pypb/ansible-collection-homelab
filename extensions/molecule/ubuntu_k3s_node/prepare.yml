@@ -1,0 +1,26 @@
+---
+- name: Prepare the targets
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # Shows that the role purges what's on its list.
+    - name: Install a package the role purges
+      ansible.builtin.apt:
+        name: motd-news-config
+        update_cache: true
+
+- name: Prepare a host whose network configuration comes from cloud-init
+  hosts: cloud_init
+  gather_facts: false
+  tasks:
+    - name: Create the netplan directory
+      ansible.builtin.file:
+        path: /etc/netplan
+        state: directory
+        mode: "0755"
+
+    - name: Add network configuration from cloud-init
+      ansible.builtin.copy:
+        content: "network: {version: 2}\n"
+        dest: /etc/netplan/50-cloud-init.yaml
+        mode: "0600"

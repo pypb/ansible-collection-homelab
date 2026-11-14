@@ -1,0 +1,215 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: __iscsi_initiator_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - iscsi_initiator_targets | rejectattr('target', 'defined') | list | length == 0
+      - iscsi_initiator_targets | rejectattr('portal', 'defined') | list | length == 0
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. Each of iscsi_initiator_targets
+      needs a target and a portal.
+    quiet: true
+
+- name: Install packages
+  ansible.builtin.apt:
+    name: "{{ __iscsi_initiator_install }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: __iscsi_initiator_install_result
+
+- name: Enable and start multipathd
+  ansible.builtin.systemd_service:
+    name: multipathd.service
+    enabled: true
+    state: "{{ 'started' if iscsi_initiator_start | bool else omit }}"
+  when:
+    - iscsi_initiator_multipathd | bool
+    - not __iscsi_initiator_pending
+
+- name: Stop and disable multipathd
+  when:
+    - not iscsi_initiator_multipathd | bool
+    - not __iscsi_initiator_pending
+  block:
+    - name: Look for multipathd
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=LoadState, --property=UnitFileState, "{{ item }}"]
+      loop:
+        - multipathd.socket
+        - multipathd.service
+      register: __iscsi_initiator_multipathd_units
+      changed_when: false
+      check_mode: false
+
+    # The socket first, so it can't start the service again. Newer packages ship the
+    # socket as a static unit, which can't be disabled.
+    - name: Stop and disable the multipathd units
+      ansible.builtin.systemd_service:
+        name: "{{ item['item'] }}"
+        enabled: "{{ false if __unit['UnitFileState'] in ['enabled', 'enabled-runtime'] else omit }}"
+        state: stopped
+      loop: "{{ __iscsi_initiator_multipathd_units['results'] }}"
+      loop_control:
+        label: "{{ item['item'] }}"
+      vars:
+        __unit: "{{ dict(item['stdout_lines'] | map('split', '=', 1)) }}"
+      when: __unit['LoadState'] == 'loaded'
+
+- name: Configure iscsid
+  ansible.builtin.lineinfile:
+    path: /etc/iscsi/iscsid.conf
+    regexp: "^\\s*{{ item['key'] | regex_escape }}\\s*="
+    line: "{{ item['key'] }} = {{ item['value'] }}"
+  loop: "{{ iscsi_initiator_iscsid_settings | dict2items }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+  when: not __iscsi_initiator_pending
+
+- name: Set the initiator name
+  ansible.builtin.lineinfile:
+    path: /etc/iscsi/initiatorname.iscsi
+    regexp: "^InitiatorName="
+    line: "InitiatorName={{ __iscsi_initiator_name }}"
+  register: __iscsi_initiator_name_file
+  when:
+    - __iscsi_initiator_name | length > 0
+    - not __iscsi_initiator_pending
+
+- name: Set the disk timeout
+  ansible.builtin.template:
+    src: 99-iscsi-timeout.rules.j2
+    dest: /etc/udev/rules.d/99-iscsi-timeout.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload the udev rules
+  when: iscsi_initiator_device_vendors | length > 0
+
+- name: Remove the disk timeout
+  ansible.builtin.file:
+    path: /etc/udev/rules.d/99-iscsi-timeout.rules
+    state: absent
+  notify: Reload the udev rules
+  when: iscsi_initiator_device_vendors | length == 0
+
+# open-iscsi logs in to the targets marked automatic at boot.
+- name: Enable open-iscsi
+  ansible.builtin.systemd_service:
+    name: open-iscsi.service
+    enabled: true
+  when: not __iscsi_initiator_pending
+
+- name: Enable and start iscsid
+  ansible.builtin.systemd_service:
+    name: iscsid.service
+    enabled: true
+    state: "{{ 'started' if iscsi_initiator_start | bool else omit }}"
+  register: __iscsi_initiator_iscsid
+  when: not __iscsi_initiator_pending
+
+# iscsid reads the name when it starts. Sessions stay up while it restarts.
+- name: Restart iscsid for the new initiator name  # noqa: no-handler
+  ansible.builtin.systemd_service:
+    name: iscsid.service
+    state: restarted
+  when:
+    - iscsi_initiator_start | bool
+    - __iscsi_initiator_name_file is changed
+    - __iscsi_initiator_iscsid is not changed
+
+- name: Set up the targets
+  when:
+    - iscsi_initiator_targets | length > 0
+    - not __iscsi_initiator_pending
+  block:
+    - name: List the node records
+      ansible.builtin.command:
+        argv: [iscsiadm, --mode, node]
+      register: __iscsi_initiator_nodes
+      changed_when: false
+      check_mode: false
+      # 21 means there are no records yet.
+      failed_when: __iscsi_initiator_nodes['rc'] not in [0, 21]
+
+    # Only targets without a record: discovery resets the records it finds, such as
+    # their startup setting.
+    - name: Discover the targets
+      community.general.open_iscsi:
+        portal: "{{ __iscsi_initiator_target['portal'] }}"
+        port: "{{ __iscsi_initiator_target['port'] | default(3260) | string }}"
+        discover: true
+      loop: "{{ iscsi_initiator_targets }}"
+      loop_control:
+        loop_var: __iscsi_initiator_target
+        label: "{{ __iscsi_initiator_target['target'] }}"
+      when: __iscsi_initiator_target['target'] not in __iscsi_initiator_known
+
+    - name: Read the node records
+      ansible.builtin.command:
+        argv:
+          - iscsiadm
+          - --mode
+          - node
+          - --targetname
+          - "{{ __iscsi_initiator_target['target'] }}"
+          - --portal
+          - "{{ __iscsi_initiator_portal }}"
+      loop: "{{ iscsi_initiator_targets }}"
+      loop_control:
+        loop_var: __iscsi_initiator_target
+        label: "{{ __iscsi_initiator_target['target'] }}"
+      register: __iscsi_initiator_records
+      changed_when: false
+      check_mode: false
+      # In check mode, a target that wasn't discovered has no record yet.
+      failed_when: __iscsi_initiator_records['rc'] not in [0, 21]
+
+    # Discovery copies iscsid.conf into new records. This updates the existing ones.
+    - name: Apply the iscsid settings to the node records
+      ansible.builtin.command:
+        argv:
+          - iscsiadm
+          - --mode
+          - node
+          - --targetname
+          - "{{ __iscsi_initiator_target['target'] }}"
+          - --portal
+          - "{{ __iscsi_initiator_portal }}"
+          - --op
+          - update
+          - --name
+          - "{{ item.1['key'] }}"
+          - --value
+          - "{{ item.1['value'] }}"
+      loop: "{{ __iscsi_initiator_records['results'] | product(__iscsi_initiator_node_settings) | list }}"
+      loop_control:
+        label: "{{ __iscsi_initiator_target['target'] }} {{ item.1['key'] }}"
+      vars:
+        __iscsi_initiator_target: "{{ item.0['__iscsi_initiator_target'] }}"
+        __current: "{{ item.0['stdout'] | regex_search('^' ~ (item.1['key'] | regex_escape) ~ ' = (.*)$', '\\1', multiline=true) }}"
+      changed_when: true
+      when:
+        - item.0['rc'] == 0
+        - __current != [item.1['value'] | string]
+
+    # login false logs out. Without iscsi_initiator_start, the sessions are left alone.
+    - name: Log in to the targets
+      community.general.open_iscsi:
+        target: "{{ __iscsi_initiator_target['target'] }}"
+        portal: "{{ __iscsi_initiator_target['portal'] }}"
+        port: "{{ __iscsi_initiator_target['port'] | default(3260) | string }}"
+        login: "{{ (__iscsi_initiator_target['login'] | default(true)) if iscsi_initiator_start | bool else omit }}"
+        auto_node_startup: "{{ __iscsi_initiator_target['auto_node_startup'] | default(true) }}"
+        auto_portal_startup: "{{ __iscsi_initiator_target['auto_portal_startup'] | default(true) }}"
+      loop: "{{ __iscsi_initiator_records['results'] }}"
+      loop_control:
+        label: "{{ __iscsi_initiator_target['target'] }}"
+      vars:
+        __iscsi_initiator_target: "{{ item['__iscsi_initiator_target'] }}"
+      when: item['rc'] == 0

@@ -1,0 +1,72 @@
+---
+- name: Verify an OCFS2 cluster
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read package facts
+      ansible.builtin.package_facts:
+
+    - name: Check ocfs2-tools was installed
+      ansible.builtin.assert:
+        that: "'ocfs2-tools' in ansible_facts['packages']"
+
+    - name: Read the applied kernel setting
+      ansible.builtin.slurp:
+        src: /proc/sys/net/ipv4/tcp_fin_timeout
+      register: __molecule_sysctl
+
+    - name: Check the sysctl settings were applied
+      ansible.builtin.assert:
+        that: __molecule_sysctl['content'] | b64decode | trim == '30'
+
+    - name: Read the OCFS2 configuration
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/ocfs2/cluster.conf
+        - /etc/default/o2cb
+        - /etc/fstab
+      register: __molecule_ocfs2
+
+    # The expected file has the tabs that o2cb writes.
+    - name: Check the OCFS2 configuration  # noqa: no-tabs
+      ansible.builtin.assert:
+        that:
+          - __cluster_conf == __expected_cluster_conf
+          - __o2cb is search('^O2CB_ENABLED=true$', multiline=true)
+          - __o2cb is search('^O2CB_BOOTCLUSTER=molecule$', multiline=true)
+          - __o2cb is search('^O2CB_HEARTBEAT_THRESHOLD=31$', multiline=true)
+          - __fstab is search('^UUID=00000000-0000-0000-0000-000000000001 /srv/ocfs2-auto ocfs2 '
+            ~ '_netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0,'
+            ~ 'x-systemd.after=o2cb.service 0 0$', multiline=true)
+          - __fstab is search('^/dev/disk/by-label/manual /srv/ocfs2-manual ocfs2 '
+            ~ '_netdev,noauto,x-systemd.after=o2cb.service 0 0$', multiline=true)
+      vars:
+        __contents: "{{ __molecule_ocfs2['results'] | map(attribute='content') | map('b64decode') | list }}"
+        __cluster_conf: "{{ __contents[0] }}"
+        __o2cb: "{{ __contents[1] }}"
+        __fstab: "{{ __contents[2] }}"
+        # The layout o2cb itself writes, with the nodes sorted by number.
+        __expected_cluster_conf: "cluster:\n\tname = molecule\n\theartbeat_mode = local\n\tnode_count = 3\n\n\
+          node:\n\tcluster = molecule\n\tnumber = 1\n\tip_port = 7778\n\tip_address = 192.0.2.11\n\tname = ocfs2-ubuntu2404\n\n\
+          node:\n\tcluster = molecule\n\tnumber = 2\n\tip_port = 7777\n\tip_address = 192.0.2.12\n\tname = ocfs2-ubuntu2604\n\n\
+          node:\n\tcluster = molecule\n\tnumber = 3\n\tip_port = 7777\n\tip_address = 192.0.2.13\n\tname = ocfs2-debian13\n\n"
+
+    - name: Run the role on a node that isn't in the cluster
+      block:
+        - name: Set up OCFS2
+          ansible.builtin.include_role:
+            name: pypb.homelab.ocfs2
+          vars:
+            ocfs2_start: false
+            ocfs2_cluster_name: molecule
+            ocfs2_nodes:
+              - {name: elsewhere, number: 1, ip_address: 192.0.2.11}
+
+        - name: Fail, because the role should have failed
+          ansible.builtin.fail:
+            msg: The role accepted a node that isn't in the cluster
+      rescue:
+        - name: Check the role failed for the right reason
+          ansible.builtin.assert:
+            that: ansible_failed_result['msg'] is search("isn't a name in ocfs2_nodes")

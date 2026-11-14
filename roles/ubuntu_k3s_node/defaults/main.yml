@@ -1,0 +1,108 @@
+---
+# Write the PSA admission configuration and audit policy that k3s servers read.
+ubuntu_k3s_node_server: false
+
+# k3s data directory. The server files go in its server/ subdirectory.
+ubuntu_k3s_node_data_dir: /var/lib/rancher/k3s
+
+# Packages to install.
+ubuntu_k3s_node_packages:
+  - nfs-common
+
+# Packages that conflict with k3s, or that the cluster runs itself. Purged.
+ubuntu_k3s_node_conflicting_packages:
+  - docker
+  - docker-ce
+  - docker-ce-cli
+  - docker-compose
+  - docker-compose-plugin
+  - prometheus-node-exporter
+  - ufw
+
+# Packages a k3s node doesn't need. Purged, without autoremove.
+ubuntu_k3s_node_unneeded_packages:
+  - apport
+  - byobu
+  - cloud-init
+  - landscape-common
+  - lxd-installer
+  - modemmanager
+  - motd-news-config
+  - plymouth
+  - pollinate
+  - popularity-contest
+  - snapd
+  - sosreport
+  - ubuntu-advantage-tools
+  - ubuntu-pro-client
+  - update-notifier-common
+  - whoopsie
+
+# Units to stop and mask. Units that don't exist are masked too.
+ubuntu_k3s_node_masked_units: []
+#  - thermald.service
+
+# Settings for /etc/sysctl.d/95-k8s.conf.
+ubuntu_k3s_node_sysctl:
+  vm.overcommit_memory: 1
+
+# Kernel modules that may not be loaded.
+ubuntu_k3s_node_blacklisted_modules:
+  - btrfs
+  - raid0
+  - raid1
+  - raid10
+  - raid456
+  - raid6_pq
+
+# Prepare the node for Cilium: load its kernel modules at boot, and stop rp_filter
+# from dropping its traffic. False removes both again.
+ubuntu_k3s_node_cilium: false
+ubuntu_k3s_node_cilium_modules:
+  - cls_bpf
+  - sch_ingress
+  - vxlan
+  - geneve
+  - ip_set
+  - ip_tables
+  - iptable_filter
+  - iptable_mangle
+  - iptable_nat
+  - iptable_raw
+  - xt_CT
+  - xt_mark
+  - xt_set
+  - xt_socket
+  - xt_TPROXY
+
+# Directory for local persistent storage, created if missing.
+ubuntu_k3s_node_storage_dir: /srv/k8s-storage
+
+# Directory for node configuration, such as resolv.conf.
+ubuntu_k3s_node_config_dir: /etc/k8s
+
+# Nameservers for <config_dir>/resolv.conf, which k3s can pass to pods with its
+# resolv-conf option. The file isn't written when this is empty.
+ubuntu_k3s_node_resolvers: []
+
+# Write /etc/nfsmount.conf with defaults suited to NFS volumes.
+ubuntu_k3s_node_nfsmount_conf: true
+
+# Install and run cachefilesd, a local cache for NFS mounts with the fsc option.
+ubuntu_k3s_node_cachefilesd: true
+
+# Mount points to check every 15 minutes. The node reboots if one isn't mounted.
+ubuntu_k3s_node_mount_watchdog_paths: []
+
+# Pod Security Admission defaults for namespaces without their own labels.
+ubuntu_k3s_node_psa_defaults:
+  enforce: privileged
+  enforce-version: latest
+  audit: baseline
+  audit-version: latest
+  warn: baseline
+  warn-version: latest
+
+# Namespaces that Pod Security Admission doesn't check.
+ubuntu_k3s_node_psa_exempt_namespaces:
+  - kube-system

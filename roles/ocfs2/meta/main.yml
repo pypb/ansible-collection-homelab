@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  role_name: ocfs2
+  namespace: pypb
+  author: pypb
+  description: Set up OCFS2 with the o2cb cluster stack, and mount its file systems.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - ocfs2
+    - cluster
+    - filesystem
+    - storage
+dependencies: []

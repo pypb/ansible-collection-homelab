@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Check every 15 minutes that {{ __ubuntu_k3s_node_path }} is mounted
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit={{ __ubuntu_k3s_node_watchdog_unit }}.service
+
+[Install]
+WantedBy=timers.target

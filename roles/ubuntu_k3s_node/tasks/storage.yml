@@ -1,0 +1,82 @@
+---
+- name: Create the storage and configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+  loop:
+    - "{{ ubuntu_k3s_node_storage_dir }}"
+    - "{{ ubuntu_k3s_node_config_dir }}"
+
+- name: Write resolv.conf for k3s
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: "{{ ubuntu_k3s_node_config_dir }}/resolv.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when: ubuntu_k3s_node_resolvers | length > 0
+
+- name: Write nfsmount.conf
+  ansible.builtin.copy:
+    src: nfsmount.conf
+    dest: /etc/nfsmount.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: ubuntu_k3s_node_nfsmount_conf | bool
+
+- name: Set up cachefilesd
+  when: ubuntu_k3s_node_cachefilesd | bool
+  block:
+    - name: Let cachefilesd run
+      ansible.builtin.lineinfile:
+        path: /etc/default/cachefilesd
+        regexp: "^#?RUN="
+        line: RUN=yes
+
+    - name: Enable and start cachefilesd
+      ansible.builtin.systemd_service:
+        name: cachefilesd
+        enabled: true
+        state: started
+
+- name: Write mount watchdog services
+  ansible.builtin.template:
+    src: mount-watchdog.service.j2
+    dest: "/etc/systemd/system/{{ __ubuntu_k3s_node_watchdog_unit }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ubuntu_k3s_node_mount_watchdog_paths }}"
+  loop_control:
+    loop_var: __ubuntu_k3s_node_path
+
+- name: Write mount watchdog timers
+  ansible.builtin.template:
+    src: mount-watchdog.timer.j2
+    dest: "/etc/systemd/system/{{ __ubuntu_k3s_node_watchdog_unit }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ubuntu_k3s_node_mount_watchdog_paths }}"
+  loop_control:
+    loop_var: __ubuntu_k3s_node_path
+  register: __ubuntu_k3s_node_timers
+
+# In check mode, a new timer doesn't exist yet and can't be enabled.
+- name: Enable and start mount watchdog timers
+  ansible.builtin.systemd_service:
+    name: "{{ __ubuntu_k3s_node_watchdog_unit }}.timer"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop: "{{ __ubuntu_k3s_node_timers['results'] }}"
+  loop_control:
+    loop_var: __ubuntu_k3s_node_timer
+    label: "{{ __ubuntu_k3s_node_path }}"
+  vars:
+    __ubuntu_k3s_node_path: "{{ __ubuntu_k3s_node_timer['__ubuntu_k3s_node_path'] }}"
+  when: not (ansible_check_mode and __ubuntu_k3s_node_timer is changed)

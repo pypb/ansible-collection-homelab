@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for vendor in iscsi_initiator_device_vendors %}
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd*", ATTR{device/vendor}=="{{ vendor }}", ATTR{device/timeout}="{{ iscsi_initiator_device_timeout }}"
+{% endfor %}

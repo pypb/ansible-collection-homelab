@@ -1,0 +1,76 @@
+---
+# Masking works for units that don't exist, but stopping doesn't, so only the
+# units that are running are stopped.
+- name: Mask units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ ubuntu_k3s_node_masked_units }}"
+
+- name: Find masked units that are running
+  ansible.builtin.command:
+    argv: "{{ ['systemctl', 'show', '--property=ActiveState', '--value'] + ubuntu_k3s_node_masked_units }}"
+  register: __ubuntu_k3s_node_unit_states
+  changed_when: false
+  check_mode: false
+  when: ubuntu_k3s_node_masked_units | length > 0
+
+- name: Stop masked units
+  ansible.builtin.systemd_service:
+    name: "{{ item.0 }}"
+    state: stopped
+  # systemctl separates the units with blank lines.
+  loop: >-
+    {{ ubuntu_k3s_node_masked_units
+       | zip(__ubuntu_k3s_node_unit_states['stdout_lines'] | default([]) | reject('eq', '')) }}
+  loop_control:
+    label: "{{ item.0 }}"
+  when: item.1 not in ['inactive', 'failed']
+
+- name: Write sysctl settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/95-k8s.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl settings
+
+- name: Blacklist kernel modules
+  ansible.builtin.template:
+    src: blacklist.conf.j2
+    dest: /etc/modprobe.d/blacklist-unused-storage.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update initramfs
+
+# The file name is the one Cilium's documentation uses. It sorts after the
+# distribution's files, so its settings win.
+- name: Manage rp_filter overrides for Cilium
+  ansible.builtin.copy:
+    src: 99-zzz-override_cilium.conf
+    dest: /etc/sysctl.d/99-zzz-override_cilium.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: ubuntu_k3s_node_cilium | bool
+  notify: Apply sysctl settings
+
+- name: Load kernel modules for Cilium at boot
+  ansible.builtin.template:
+    src: modules-load.conf.j2
+    dest: /etc/modules-load.d/cilium.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: ubuntu_k3s_node_cilium | bool
+
+- name: Remove Cilium settings
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/sysctl.d/99-zzz-override_cilium.conf
+    - /etc/modules-load.d/cilium.conf
+  when: not ubuntu_k3s_node_cilium | bool

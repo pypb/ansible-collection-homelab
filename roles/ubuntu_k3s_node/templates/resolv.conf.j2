@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+{% for ip in ubuntu_k3s_node_resolvers %}
+nameserver {{ ip }}
+{% endfor %}
+options edns0 timeout:2

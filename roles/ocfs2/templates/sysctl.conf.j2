@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for key, value in ocfs2_sysctl | dictsort %}
+{{ key }} = {{ value }}
+{% endfor %}
