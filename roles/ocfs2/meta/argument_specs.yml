@@ -1,0 +1,94 @@
+---
+argument_specs:
+  main:
+    short_description: Set up OCFS2 with the o2cb cluster stack, and mount its file systems.
+    description:
+      - Installs ocfs2-tools, and the kernel module when the running or the next kernel lacks it.
+      - Writes the o2cb cluster configuration and timeouts, and enables and starts the cluster stack without ever restarting it.
+      - Sets the sysctl settings that make a fenced node reboot.
+      - Adds the file systems to fstab, ordered after the cluster stack, and starts their automount or mount units.
+      - Doesn't create file systems or open the firewall.
+    author:
+      - pypb
+    options:
+      ocfs2_start:
+        type: bool
+        default: true
+        description:
+          - Start the cluster stack and the mounts, and make sure the running and the next kernel have the OCFS2 module.
+          - False only writes the configuration.
+      ocfs2_cluster_name:
+        type: str
+        required: true
+        description: Name of the o2cb cluster, 1 to 16 letters, digits or underscores.
+      ocfs2_nodes:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - Every node of the cluster. Use the same list on every node.
+          - Never change the number of an existing node.
+        options:
+          name:
+            type: str
+            required: true
+            description: Host name of the node, as C(uname -n) prints it.
+          number:
+            type: int
+            required: true
+            description: Unique node number, from 0 to 254.
+          ip_address:
+            type: str
+            required: true
+            description: Address the other nodes reach this node on.
+          ip_port:
+            type: int
+            default: 7777
+            description: TCP port of the cluster stack.
+      ocfs2_heartbeat_threshold:
+        type: int
+        default: 31
+        description: Disk heartbeat threshold. A node is declared dead after (threshold - 1) x 2 seconds without a heartbeat.
+      ocfs2_idle_timeout_ms:
+        type: int
+        default: 30000
+        description: Time in milliseconds before an idle network connection to another node is considered down.
+      ocfs2_keepalive_delay_ms:
+        type: int
+        default: 2000
+        description: Time in milliseconds before a keepalive is sent on an idle network connection.
+      ocfs2_reconnect_delay_ms:
+        type: int
+        default: 2000
+        description: Time in milliseconds between attempts to reconnect to another node.
+      ocfs2_sysctl:
+        type: dict
+        default:
+          kernel.panic: 10
+          kernel.panic_on_oops: 1
+        description:
+          - Settings for C(/etc/sysctl.d/95-ocfs2.conf). They're applied when the file changes.
+          - OCFS2 fences a node by panicking it. The defaults make the node reboot 10 seconds later.
+      ocfs2_mounts:
+        type: list
+        elements: dict
+        default: []
+        description: OCFS2 file systems to add to fstab and mount.
+        options:
+          path:
+            type: path
+            required: true
+            description: Mount point.
+          src:
+            type: str
+            required: true
+            description: Device, such as C(UUID=...) or C(/dev/disk/by-id/...).
+          opts:
+            type: str
+            description:
+              - Mount options. Defaults to C(ocfs2_mount_opts).
+              - The role adds C(x-systemd.after=o2cb.service).
+      ocfs2_mount_opts:
+        type: str
+        default: _netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0
+        description: Mount options for entries in C(ocfs2_mounts) without their own.

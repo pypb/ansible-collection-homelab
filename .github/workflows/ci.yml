@@ -50,6 +50,8 @@ jobs:
           - smtp_client
           - acme_certificates
           - ubuntu_k3s_node
+          - ocfs2
+          - iscsi_initiator
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

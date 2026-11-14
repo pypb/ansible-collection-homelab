@@ -24,10 +24,6 @@
 - name: Configure the kernel and units
   ansible.builtin.include_tasks: system.yml
 
-- name: Set up OCFS2
-  ansible.builtin.include_tasks: ocfs2.yml
-  when: ubuntu_k3s_node_ocfs2 | bool
-
 - name: Configure storage and DNS
   ansible.builtin.include_tasks: storage.yml
 

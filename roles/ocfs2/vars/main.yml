@@ -1,0 +1,18 @@
+---
+__ocfs2_required_facts:
+  - distribution
+  - os_family
+  - kernel
+  - nodename
+
+# Kernels, from the running and the next one, whose ocfs2 module wasn't found.
+__ocfs2_missing: "{{ __ocfs2_module['results'] | selectattr('rc', 'ne', 0) | map(attribute='item') | list }}"
+
+__ocfs2_node_names: "{{ ocfs2_nodes | map(attribute='name') | list }}"
+__ocfs2_node_numbers: "{{ ocfs2_nodes | map(attribute='number') | map('int') | list }}"
+
+# Mounting needs the o2cb cluster stack. x-systemd.after orders the mount after it at
+# boot, and the unmount before it at shutdown, without stopping the mount if o2cb
+# restarts.
+__ocfs2_mount_opts: >-
+  {{ __ocfs2_mount['opts'] | default(ocfs2_mount_opts) }},x-systemd.after=o2cb.service

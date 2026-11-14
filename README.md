@@ -29,7 +29,9 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
 | [`pypb.homelab.acme_certificates`](roles/acme_certificates/README.md) | Trusts private CAs, and requests certificates from an ACME server with DNS-01 and installs them anywhere, including Unifi keystores | Debian 12 and 13, Ubuntu 24.04 and 26.04 |
-| [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up OCFS2, sysctl, NFS, mount watchdogs, Cilium prerequisites and the k3s server's PSA and audit files | Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up sysctl, NFS, mount watchdogs, Cilium prerequisites and the k3s server's PSA and audit files | Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.iscsi_initiator`](roles/iscsi_initiator/README.md) | Sets up open-iscsi and logs in to targets now and at boot, with a disk timeout for chosen vendors and optional multipathd | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
 
@@ -46,7 +48,7 @@ It only acts on hosts where `restic_backup_enable` is true.
 
 | Playbook | Description |
 |---|---|
-| [`pypb.homelab.ubuntu_k3s_node`](playbooks/ubuntu_k3s_node.yml) | Runs the `ubuntu_k3s_node` role on one node at a time, optionally reboots it, and waits for servers to be Ready before the next node |
+| [`pypb.homelab.ubuntu_k3s_node`](playbooks/ubuntu_k3s_node.yml) | Runs the `ubuntu_k3s_node` role, and before it the `iscsi_initiator` and `ocfs2` roles when `ubuntu_k3s_node_iscsi` and `ubuntu_k3s_node_ocfs2` are true, on one node at a time, optionally reboots it, and waits for servers that run k3s to be Ready before the next node. It doesn't install k3s: use a role such as `xanmanning.k3s` after it |
 
 ```shell
 ansible-playbook pypb.homelab.ubuntu_k3s_node -e ubuntu_k3s_node_hosts=k3s_nodes --limit node1
@@ -89,6 +91,8 @@ molecule test --scenario-name restic_backup
 molecule test --scenario-name smtp_client
 molecule test --scenario-name acme_certificates
 molecule test --scenario-name ubuntu_k3s_node
+molecule test --scenario-name ocfs2
+molecule test --scenario-name iscsi_initiator
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and

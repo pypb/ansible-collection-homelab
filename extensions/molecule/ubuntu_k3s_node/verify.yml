@@ -12,6 +12,7 @@
           - "'nfs-common' in ansible_facts['packages']"
           - "'motd-news-config' not in ansible_facts['packages']"
           - "'ocfs2-tools' in ansible_facts['packages']"
+          - "'open-iscsi' in ansible_facts['packages']"
 
     - name: Read unit states
       ansible.builtin.command:
@@ -48,6 +49,16 @@
           - __molecule_sysctl['results'] | map(attribute='content') | map('b64decode') | map('trim') | list
             == ['600', '0', '30']
 
+    # k3s isn't installed, so the role created the server directory.
+    - name: Read the k3s server directory
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server
+      register: __molecule_server_dir
+
+    - name: Check the k3s server directory is private
+      ansible.builtin.assert:
+        that: __molecule_server_dir['stat']['mode'] == '0700'
+
     - name: Read the written files
       ansible.builtin.slurp:
         src: "{{ item }}"
@@ -76,57 +87,14 @@
         __psa: "{{ __contents[3] | from_yaml }}"
         __audit: "{{ __contents[4] | from_yaml }}"
 
-    - name: Read the OCFS2 configuration
-      ansible.builtin.slurp:
-        src: "{{ item }}"
-      loop:
-        - /etc/ocfs2/cluster.conf
-        - /etc/default/o2cb
-        - /etc/fstab
-      register: __molecule_ocfs2
+    - name: Look for the OCFS2 cluster configuration
+      ansible.builtin.stat:
+        path: /etc/ocfs2/cluster.conf
+      register: __molecule_cluster_conf
 
-    # The expected file has the tabs that o2cb writes.
-    - name: Check the OCFS2 configuration  # noqa: no-tabs
+    - name: Check the playbook ran the ocfs2 role
       ansible.builtin.assert:
-        that:
-          - __cluster_conf == __expected_cluster_conf
-          - __o2cb is search('^O2CB_ENABLED=true$', multiline=true)
-          - __o2cb is search('^O2CB_BOOTCLUSTER=molecule$', multiline=true)
-          - __o2cb is search('^O2CB_HEARTBEAT_THRESHOLD=31$', multiline=true)
-          - __fstab is search('^UUID=00000000-0000-0000-0000-000000000001 /srv/ocfs2-auto ocfs2 '
-            ~ '_netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0,'
-            ~ 'x-systemd.after=o2cb.service 0 0$', multiline=true)
-          - __fstab is search('^/dev/disk/by-label/manual /srv/ocfs2-manual ocfs2 '
-            ~ '_netdev,noauto,x-systemd.after=o2cb.service 0 0$', multiline=true)
-      vars:
-        __contents: "{{ __molecule_ocfs2['results'] | map(attribute='content') | map('b64decode') | list }}"
-        __cluster_conf: "{{ __contents[0] }}"
-        __o2cb: "{{ __contents[1] }}"
-        __fstab: "{{ __contents[2] }}"
-        # The layout o2cb itself writes, with the nodes sorted by number.
-        __expected_cluster_conf: "cluster:\n\tname = molecule\n\theartbeat_mode = local\n\tnode_count = 2\n\n\
-          node:\n\tcluster = molecule\n\tnumber = 1\n\tip_port = 7778\n\tip_address = 192.0.2.11\n\tname = k3s-node-ubuntu2404\n\n\
-          node:\n\tcluster = molecule\n\tnumber = 2\n\tip_port = 7777\n\tip_address = 192.0.2.12\n\tname = k3s-node-ubuntu2604\n\n"
-
-    - name: Run the role on a node that isn't in the OCFS2 cluster
-      block:
-        - name: Prepare the node
-          ansible.builtin.include_role:
-            name: pypb.homelab.ubuntu_k3s_node
-          vars:
-            ubuntu_k3s_node_ocfs2: true
-            ubuntu_k3s_node_ocfs2_start: false
-            ubuntu_k3s_node_ocfs2_cluster_name: molecule
-            ubuntu_k3s_node_ocfs2_nodes:
-              - {name: elsewhere, number: 1, ip_address: 192.0.2.11}
-
-        - name: Fail, because the role should have failed
-          ansible.builtin.fail:
-            msg: The role accepted a node that isn't in the OCFS2 cluster
-      rescue:
-        - name: Check the role failed for the right reason
-          ansible.builtin.assert:
-            that: ansible_failed_result['msg'] is search("isn't a name in ubuntu_k3s_node_ocfs2_nodes")
+        that: __molecule_cluster_conf['stat']['exists']
 
     - name: Read the mount watchdog timer
       ansible.builtin.command:

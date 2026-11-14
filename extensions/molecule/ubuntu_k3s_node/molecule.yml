@@ -16,7 +16,7 @@ provisioner:
         # kernel of the machine it runs on. vm.overcommit_memory isn't.
         ubuntu_k3s_node_sysctl:
           net.ipv4.tcp_keepalive_time: 600
-        ubuntu_k3s_node_ocfs2_sysctl:
+        ocfs2_sysctl:
           net.ipv4.tcp_fin_timeout: 30
         # cachefilesd needs a kernel module the container can't rely on.
         ubuntu_k3s_node_cachefilesd: false

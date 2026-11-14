@@ -1,0 +1,36 @@
+---
+# Start the cluster stack and the mounts, and check the kernel module. False only
+# writes the configuration, for example for a host that hasn't booted its kernel yet.
+ocfs2_start: true
+
+# Name of the o2cb cluster, at most 16 letters, digits or underscores. Required.
+# ocfs2_cluster_name: shared
+
+# Every node of the cluster, the same list on every node. The name must be the
+# node's host name (uname -n). Never change the number of an existing node.
+ocfs2_nodes: []
+#  - name: node1
+#    number: 1
+#    ip_address: 192.0.2.11
+#    ip_port: 7777
+
+# o2cb timeouts. They take effect when the cluster stack next starts on the node.
+ocfs2_heartbeat_threshold: 31
+ocfs2_idle_timeout_ms: 30000
+ocfs2_keepalive_delay_ms: 2000
+ocfs2_reconnect_delay_ms: 2000
+
+# Settings for /etc/sysctl.d/95-ocfs2.conf. OCFS2 fences a node by panicking it,
+# and these make the node reboot when it does.
+ocfs2_sysctl:
+  kernel.panic: 10
+  kernel.panic_on_oops: 1
+
+# OCFS2 file systems to mount, as fstab entries ordered after the cluster stack.
+ocfs2_mounts: []
+#  - path: /srv/shared
+#    src: UUID=00000000-0000-0000-0000-000000000000
+#    opts: _netdev,noauto,x-systemd.automount
+
+# Default mount options for entries without opts.
+ocfs2_mount_opts: _netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0

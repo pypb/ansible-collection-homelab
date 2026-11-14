@@ -1,0 +1,26 @@
+---
+- name: Prepare an existing node record
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # multipath-tools shows that the role stops multipathd.
+    - name: Install open-iscsi and multipath-tools
+      ansible.builtin.apt:
+        name: [open-iscsi, multipath-tools]
+
+    # Discovery and logins need the iscsi_tcp kernel module, which a container can't
+    # load, so the record is created by hand, with the package's 120-second timeout
+    # for the role to update.
+    - name: Add a node record with the default settings
+      ansible.builtin.command:
+        argv:
+          - iscsiadm
+          - --mode
+          - node
+          - --op
+          - new
+          - --targetname
+          - iqn.2000-01.org.example:molecule.disk
+          - --portal
+          - "127.0.0.1:3260"
+      changed_when: true

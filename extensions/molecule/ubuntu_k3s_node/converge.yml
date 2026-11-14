@@ -1,35 +1,30 @@
 ---
+# Through the playbook, on servers that don't have k3s yet.
 - name: Converge a server prepared for Cilium
-  hosts: targets
-  gather_facts: false
-  tasks:
-    - name: Prepare the node
-      ansible.builtin.include_role:
-        name: pypb.homelab.ubuntu_k3s_node
-      vars:
-        ubuntu_k3s_node_server: true
-        ubuntu_k3s_node_cilium: true
-        ubuntu_k3s_node_resolvers:
-          - 192.0.2.53
-          - 192.0.2.54
-        ubuntu_k3s_node_masked_units:
-          - apt-daily.timer
-          - molecule-missing.service
-        ubuntu_k3s_node_mount_watchdog_paths:
-          - /mnt/watched
-        ubuntu_k3s_node_psa_exempt_namespaces:
-          - kube-system
-          - molecule-system
-        # Containers can't load the kernel modules, so only the configuration is tested.
-        ubuntu_k3s_node_ocfs2: true
-        ubuntu_k3s_node_ocfs2_start: false
-        ubuntu_k3s_node_ocfs2_cluster_name: molecule
-        ubuntu_k3s_node_ocfs2_nodes:
-          - {name: k3s-node-ubuntu2604, number: 2, ip_address: 192.0.2.12}
-          - {name: k3s-node-ubuntu2404, number: 1, ip_address: 192.0.2.11, ip_port: 7778}
-        ubuntu_k3s_node_ocfs2_mounts:
-          - path: /srv/ocfs2-auto
-            src: UUID=00000000-0000-0000-0000-000000000001
-          - path: /srv/ocfs2-manual
-            src: /dev/disk/by-label/manual
-            opts: _netdev,noauto
+  ansible.builtin.import_playbook: pypb.homelab.ubuntu_k3s_node
+  vars:
+    ubuntu_k3s_node_hosts: targets
+    ubuntu_k3s_node_server: true
+    ubuntu_k3s_node_cilium: true
+    ubuntu_k3s_node_resolvers:
+      - 192.0.2.53
+      - 192.0.2.54
+    ubuntu_k3s_node_masked_units:
+      - apt-daily.timer
+      - molecule-missing.service
+    ubuntu_k3s_node_mount_watchdog_paths:
+      - /mnt/watched
+    ubuntu_k3s_node_psa_exempt_namespaces:
+      - kube-system
+      - molecule-system
+    # The playbook runs the iscsi_initiator and ocfs2 roles, which have their own
+    # scenarios. Containers can't load the kernel modules, so OCFS2 only writes its
+    # configuration.
+    ubuntu_k3s_node_iscsi: true
+    iscsi_initiator_start: false
+    ubuntu_k3s_node_ocfs2: true
+    ocfs2_start: false
+    ocfs2_cluster_name: molecule
+    ocfs2_nodes:
+      - {name: k3s-node-ubuntu2404, number: 1, ip_address: 192.0.2.11}
+      - {name: k3s-node-ubuntu2604, number: 2, ip_address: 192.0.2.12}

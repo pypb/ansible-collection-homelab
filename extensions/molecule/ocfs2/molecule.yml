@@ -1,0 +1,52 @@
+---
+platforms:
+  - name: ocfs2-debian13
+    image: docker.io/library/debian:13
+  - name: ocfs2-ubuntu2404
+    image: docker.io/library/ubuntu:24.04
+  - name: ocfs2-ubuntu2604
+    image: docker.io/library/ubuntu:26.04
+
+provisioner:
+  name: ansible
+  inventory:
+    group_vars:
+      all:
+        # A setting that is per network namespace, so the test doesn't change the
+        # kernel of the machine it runs on. kernel.panic isn't.
+        ocfs2_sysctl:
+          net.ipv4.tcp_fin_timeout: 30
+    hosts:
+      controller:
+        hosts:
+          molecule-host:
+            ansible_connection: local
+            ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      targets:
+        hosts:
+          ocfs2-debian13:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          ocfs2-ubuntu2404:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+          ocfs2-ubuntu2604:
+            ansible_connection: community.docker.docker
+            ansible_user: root
+  config_options:
+    defaults:
+      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+      host_key_checking: false
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - check
+    - converge
+    - idempotence
+    - verify
+    - destroy

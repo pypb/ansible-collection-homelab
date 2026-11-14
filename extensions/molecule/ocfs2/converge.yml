@@ -1,0 +1,22 @@
+---
+- name: Converge an OCFS2 cluster
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up OCFS2
+      ansible.builtin.include_role:
+        name: pypb.homelab.ocfs2
+      vars:
+        # Containers can't load the kernel module, so only the configuration is tested.
+        ocfs2_start: false
+        ocfs2_cluster_name: molecule
+        ocfs2_nodes:
+          - {name: ocfs2-ubuntu2604, number: 2, ip_address: 192.0.2.12}
+          - {name: ocfs2-ubuntu2404, number: 1, ip_address: 192.0.2.11, ip_port: 7778}
+          - {name: ocfs2-debian13, number: 3, ip_address: 192.0.2.13}
+        ocfs2_mounts:
+          - path: /srv/ocfs2-auto
+            src: UUID=00000000-0000-0000-0000-000000000001
+          - path: /srv/ocfs2-manual
+            src: /dev/disk/by-label/manual
+            opts: _netdev,noauto

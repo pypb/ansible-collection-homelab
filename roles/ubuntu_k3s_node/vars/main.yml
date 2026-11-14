@@ -1,27 +1,12 @@
 ---
 __ubuntu_k3s_node_required_facts:
   - distribution
-  - kernel
-  - nodename
 
 __ubuntu_k3s_node_server_dir: "{{ ubuntu_k3s_node_data_dir }}/server"
 
 __ubuntu_k3s_node_install: >-
   {{ ubuntu_k3s_node_packages
-     + (['cachefilesd'] if ubuntu_k3s_node_cachefilesd | bool else [])
-     + (['ocfs2-tools'] if ubuntu_k3s_node_ocfs2 | bool else []) }}
-
-__ubuntu_k3s_node_sysctl: >-
-  {{ ubuntu_k3s_node_sysctl | combine(ubuntu_k3s_node_ocfs2_sysctl if ubuntu_k3s_node_ocfs2 | bool else {}) }}
-
-__ubuntu_k3s_node_ocfs2_node_names: "{{ ubuntu_k3s_node_ocfs2_nodes | map(attribute='name') | list }}"
-__ubuntu_k3s_node_ocfs2_node_numbers: "{{ ubuntu_k3s_node_ocfs2_nodes | map(attribute='number') | map('int') | list }}"
-
-# Mounting needs the o2cb cluster stack. x-systemd.after orders the mount after it at
-# boot, and the unmount before it at shutdown, without stopping the mount if o2cb
-# restarts.
-__ubuntu_k3s_node_ocfs2_mount_opts: >-
-  {{ __ubuntu_k3s_node_ocfs2_mount['opts'] | default(ubuntu_k3s_node_ocfs2_mount_opts) }},x-systemd.after=o2cb.service
+     + (['cachefilesd'] if ubuntu_k3s_node_cachefilesd | bool else []) }}
 
 __ubuntu_k3s_node_purge: >-
   {{ ubuntu_k3s_node_conflicting_packages + ubuntu_k3s_node_unneeded_packages }}

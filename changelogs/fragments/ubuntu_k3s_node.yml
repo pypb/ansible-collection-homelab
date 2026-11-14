@@ -5,8 +5,18 @@ minor_changes:
     blacklists kernel modules, and optionally loads Cilium's kernel modules and
     turns off rp_filter for its interfaces. It also sets up NFS, cachefilesd, a
     resolv.conf for k3s and mount watchdogs, and writes the Pod Security Admission
-    configuration and audit policy on k3s servers. Optionally, it sets up OCFS2
-    with its kernel module, the o2cb cluster stack and the mounts.
-  - ubuntu_k3s_node - new playbook that runs the ubuntu_k3s_node role on one node
-    at a time, and waits for k3s servers to be Ready before moving on.
+    configuration and audit policy on k3s servers. It doesn't install k3s, and
+    can run before a k3s role such as xanmanning.k3s.
+  - ocfs2 - new role that sets up the OCFS2 cluster file system with the o2cb
+    cluster stack. It installs the kernel module when a kernel lacks it, writes
+    the cluster configuration, sets the sysctl settings that make a fenced node
+    reboot, and mounts the file systems after the cluster stack.
+  - iscsi_initiator - new role that sets up open-iscsi and logs in to targets now
+    and at boot. It discovers only targets without a node record, applies the
+    iscsid node settings to their records, optionally sets a disk timeout for
+    chosen SCSI vendors, and runs or disables multipathd.
+  - ubuntu_k3s_node - new playbook that runs the ubuntu_k3s_node role, and before
+    it the iscsi_initiator and ocfs2 roles when ubuntu_k3s_node_iscsi and
+    ubuntu_k3s_node_ocfs2 are true, on one node at a time, and waits for servers that already run k3s to be Ready before
+    moving on.
   - The collection now depends on ansible.posix 2.0.0 or newer.

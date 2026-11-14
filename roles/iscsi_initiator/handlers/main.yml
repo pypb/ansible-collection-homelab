@@ -1,0 +1,7 @@
+---
+# The rule applies to disks as they're added, so at the next login or boot.
+# Skipped where udevd doesn't run, such as in containers.
+- name: Reload the udev rules
+  ansible.builtin.command:
+    argv: [udevadm, control, --reload]
+    removes: /run/udev/control

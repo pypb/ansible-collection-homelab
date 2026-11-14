@@ -1,0 +1,5 @@
+---
+- name: Apply the OCFS2 sysctl settings
+  ansible.builtin.command:
+    argv: [/usr/lib/systemd/systemd-sysctl, /etc/sysctl.d/95-ocfs2.conf]
+  changed_when: true
