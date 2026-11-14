@@ -28,7 +28,7 @@ server_baseline_autoremove: false
 server_baseline_apt_clean: false
 
 # Ubuntu archive mirror for archive.ubuntu.com and security.ubuntu.com in
-# /etc/apt/sources.list.d/ubuntu.sources, such as http://se.archive.ubuntu.com/ubuntu.
+# /etc/apt/sources.list.d/ubuntu.sources, such as http://de.archive.ubuntu.com/ubuntu.
 # Not changed when empty.
 server_baseline_ubuntu_mirror: ""
 
