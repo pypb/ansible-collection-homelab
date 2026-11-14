@@ -1,0 +1,229 @@
+---
+argument_specs:
+  main:
+    short_description: Prepare Ubuntu as a minimal k3s node.
+    description:
+      - Purges packages that conflict with k3s or that a node doesn't need, and masks units.
+      - Sets sysctl settings and blacklists kernel modules, and optionally prepares the node for Cilium.
+      - Sets up NFS, cachefilesd, a resolv.conf for k3s and watchdogs that reboot the node when a mount is missing.
+      - Optionally sets up OCFS2, the shared cluster file system, with its kernel module, the o2cb cluster stack and the mounts.
+      - On servers, writes the Pod Security Admission configuration and audit policy that k3s reads.
+      - Doesn't install, configure or restart k3s.
+    author:
+      - pypb
+    options:
+      ubuntu_k3s_node_server:
+        type: bool
+        default: false
+        description: Write the Pod Security Admission configuration and audit policy that k3s servers read.
+      ubuntu_k3s_node_data_dir:
+        type: path
+        default: /var/lib/rancher/k3s
+        description: k3s data directory. The server files go in its C(server) subdirectory.
+      ubuntu_k3s_node_packages:
+        type: list
+        elements: str
+        default: [nfs-common]
+        description: Packages to install.
+      ubuntu_k3s_node_conflicting_packages:
+        type: list
+        elements: str
+        default: [docker, docker-ce, docker-ce-cli, docker-compose, docker-compose-plugin, prometheus-node-exporter, ufw]
+        description: Packages that conflict with k3s, or that the cluster runs itself. They're purged.
+      ubuntu_k3s_node_unneeded_packages:
+        type: list
+        elements: str
+        default:
+          - apport
+          - byobu
+          - cloud-init
+          - landscape-common
+          - lxd-installer
+          - modemmanager
+          - motd-news-config
+          - plymouth
+          - pollinate
+          - popularity-contest
+          - snapd
+          - sosreport
+          - ubuntu-advantage-tools
+          - ubuntu-pro-client
+          - update-notifier-common
+          - whoopsie
+        description:
+          - Packages a k3s node doesn't need. They're purged, without autoremove.
+          - The role fails before purging C(cloud-init) if cloud-init wrote the netplan configuration.
+      ubuntu_k3s_node_masked_units:
+        type: list
+        elements: str
+        default: []
+        description: Units to stop and mask, with their suffix. Units that don't exist are masked too.
+      ubuntu_k3s_node_sysctl:
+        type: dict
+        default:
+          vm.overcommit_memory: 1
+        description: Settings for C(/etc/sysctl.d/95-k8s.conf). They're applied when the file changes.
+      ubuntu_k3s_node_blacklisted_modules:
+        type: list
+        elements: str
+        default: [btrfs, raid0, raid1, raid10, raid456, raid6_pq]
+        description: Kernel modules that may not be loaded. The initramfs is updated when this changes.
+      ubuntu_k3s_node_cilium:
+        type: bool
+        default: false
+        description:
+          - Load the modules in C(ubuntu_k3s_node_cilium_modules) at boot, and turn off rp_filter for Cilium's interfaces.
+          - False removes both files again. Settings already applied stay until the next reboot.
+      ubuntu_k3s_node_cilium_modules:
+        type: list
+        elements: str
+        default:
+          - cls_bpf
+          - sch_ingress
+          - vxlan
+          - geneve
+          - ip_set
+          - ip_tables
+          - iptable_filter
+          - iptable_mangle
+          - iptable_nat
+          - iptable_raw
+          - xt_CT
+          - xt_mark
+          - xt_set
+          - xt_socket
+          - xt_TPROXY
+        description:
+          - Kernel modules to load at boot for Cilium. Add C(wireguard) for WireGuard encryption.
+          - Must not overlap C(ubuntu_k3s_node_blacklisted_modules).
+      ubuntu_k3s_node_storage_dir:
+        type: path
+        default: /srv/k8s-storage
+        description: Directory for local persistent storage, created if missing.
+      ubuntu_k3s_node_config_dir:
+        type: path
+        default: /etc/k8s
+        description: Directory for node configuration, such as C(resolv.conf).
+      ubuntu_k3s_node_resolvers:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Nameservers for C(resolv.conf) in C(ubuntu_k3s_node_config_dir), for the k3s C(resolv-conf) option.
+          - The file isn't written when this is empty.
+      ubuntu_k3s_node_nfsmount_conf:
+        type: bool
+        default: true
+        description: Write C(/etc/nfsmount.conf) with defaults suited to NFS volumes.
+      ubuntu_k3s_node_cachefilesd:
+        type: bool
+        default: true
+        description: Install and run cachefilesd, a local cache for NFS mounts with the C(fsc) option.
+      ubuntu_k3s_node_mount_watchdog_paths:
+        type: list
+        elements: path
+        default: []
+        description:
+          - Mount points to check every 15 minutes, starting 5 minutes after boot. The node reboots if one isn't mounted.
+          - Paths must be absolute, without whitespace, quotes, C(%) or backslashes.
+      ubuntu_k3s_node_ocfs2:
+        type: bool
+        default: false
+        description:
+          - Set up OCFS2. Installs ocfs2-tools and the kernel module, configures and starts the o2cb cluster stack, and mounts the file systems.
+          - Requires C(ubuntu_k3s_node_ocfs2_cluster_name) and C(ubuntu_k3s_node_ocfs2_nodes).
+      ubuntu_k3s_node_ocfs2_start:
+        type: bool
+        default: true
+        description:
+          - Start the cluster stack and the mounts, and make sure the running and the next kernel have the OCFS2 module.
+          - False only writes the configuration.
+      ubuntu_k3s_node_ocfs2_cluster_name:
+        type: str
+        description: Name of the o2cb cluster, 1 to 16 letters, digits or underscores.
+      ubuntu_k3s_node_ocfs2_nodes:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - Every node of the cluster. Use the same list on every node.
+          - Never change the number of an existing node.
+        options:
+          name:
+            type: str
+            required: true
+            description: Host name of the node, as C(uname -n) prints it.
+          number:
+            type: int
+            required: true
+            description: Unique node number, from 0 to 254.
+          ip_address:
+            type: str
+            required: true
+            description: Address the other nodes reach this node on.
+          ip_port:
+            type: int
+            default: 7777
+            description: TCP port of the cluster stack.
+      ubuntu_k3s_node_ocfs2_heartbeat_threshold:
+        type: int
+        default: 31
+        description: Disk heartbeat threshold. A node is declared dead after (threshold - 1) x 2 seconds without a heartbeat.
+      ubuntu_k3s_node_ocfs2_idle_timeout_ms:
+        type: int
+        default: 30000
+        description: Time in milliseconds before an idle network connection to another node is considered down.
+      ubuntu_k3s_node_ocfs2_keepalive_delay_ms:
+        type: int
+        default: 2000
+        description: Time in milliseconds before a keepalive is sent on an idle network connection.
+      ubuntu_k3s_node_ocfs2_reconnect_delay_ms:
+        type: int
+        default: 2000
+        description: Time in milliseconds between attempts to reconnect to another node.
+      ubuntu_k3s_node_ocfs2_sysctl:
+        type: dict
+        default:
+          kernel.panic: 10
+          kernel.panic_on_oops: 1
+        description:
+          - Settings added to C(/etc/sysctl.d/95-k8s.conf) when OCFS2 is set up.
+          - OCFS2 fences a node by panicking it. The defaults make the node reboot 10 seconds later.
+      ubuntu_k3s_node_ocfs2_mounts:
+        type: list
+        elements: dict
+        default: []
+        description: OCFS2 file systems to add to fstab and mount.
+        options:
+          path:
+            type: path
+            required: true
+            description: Mount point.
+          src:
+            type: str
+            required: true
+            description: Device, such as C(UUID=...) or C(/dev/disk/by-id/...).
+          opts:
+            type: str
+            description:
+              - Mount options. Defaults to C(ubuntu_k3s_node_ocfs2_mount_opts).
+              - The role adds C(x-systemd.after=o2cb.service).
+      ubuntu_k3s_node_ocfs2_mount_opts:
+        type: str
+        default: _netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0
+        description: Mount options for entries in C(ubuntu_k3s_node_ocfs2_mounts) without their own.
+      ubuntu_k3s_node_psa_defaults:
+        type: dict
+        default:
+          enforce: privileged
+          enforce-version: latest
+          audit: baseline
+          audit-version: latest
+          warn: baseline
+          warn-version: latest
+        description: Pod Security Admission defaults for namespaces without their own labels.
+      ubuntu_k3s_node_psa_exempt_namespaces:
+        type: list
+        elements: str
+        default: [kube-system]
+        description: Namespaces that Pod Security Admission doesn't check.

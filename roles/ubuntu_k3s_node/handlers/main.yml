@@ -1,0 +1,13 @@
+---
+# Applies only the role's files. systemd-sysctl, unlike sysctl --load, understands
+# the globs and the - prefix in the Cilium overrides.
+- name: Apply sysctl settings
+  ansible.builtin.command:
+    argv: "{{ ['/usr/lib/systemd/systemd-sysctl', '/etc/sysctl.d/95-k8s.conf']
+              + (['/etc/sysctl.d/99-zzz-override_cilium.conf'] if ubuntu_k3s_node_cilium | bool else []) }}"
+  changed_when: true
+
+- name: Update initramfs
+  ansible.builtin.command:
+    argv: [update-initramfs, -u]
+  changed_when: true

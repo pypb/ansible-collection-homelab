@@ -5,7 +5,8 @@ Ansible roles and plugins for managing my homelab.
 ## Requirements
 
 - ansible-core 2.21 or newer
-- [`community.docker`](https://docs.ansible.com/ansible/latest/collections/community/docker/)
+- [`ansible.posix`](https://docs.ansible.com/ansible/latest/collections/ansible/posix/)
+  2.0.0 or newer, [`community.docker`](https://docs.ansible.com/ansible/latest/collections/community/docker/)
   5.0.0 or newer, [`community.crypto`](https://docs.ansible.com/ansible/latest/collections/community/crypto/)
   3.1.1 or newer and [`community.general`](https://docs.ansible.com/ansible/latest/collections/community/general/)
   9.0.0 or newer, which are installed automatically with this collection
@@ -28,6 +29,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
 | [`pypb.homelab.acme_certificates`](roles/acme_certificates/README.md) | Trusts private CAs, and requests certificates from an ACME server with DNS-01 and installs them anywhere, including Unifi keystores | Debian 12 and 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up OCFS2, sysctl, NFS, mount watchdogs, Cilium prerequisites and the k3s server's PSA and audit files | Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
 
@@ -41,6 +43,17 @@ ansible-playbook pypb.homelab.restic_backup -e restic_backup_hosts=backup_client
 
 The playbook targets the hosts in `restic_backup_hosts`, which defaults to `all`.
 It only acts on hosts where `restic_backup_enable` is true.
+
+| Playbook | Description |
+|---|---|
+| [`pypb.homelab.ubuntu_k3s_node`](playbooks/ubuntu_k3s_node.yml) | Runs the `ubuntu_k3s_node` role on one node at a time, optionally reboots it, and waits for servers to be Ready before the next node |
+
+```shell
+ansible-playbook pypb.homelab.ubuntu_k3s_node -e ubuntu_k3s_node_hosts=k3s_nodes --limit node1
+```
+
+The playbook targets the hosts in `ubuntu_k3s_node_hosts`, which defaults to the
+`k3s_nodes` group rather than `all`, since the role purges packages. See [Rolling out](roles/ubuntu_k3s_node/README.md#rolling-out).
 
 ### Plugins
 
@@ -75,12 +88,13 @@ molecule test --scenario-name restic_server_users
 molecule test --scenario-name restic_backup
 molecule test --scenario-name smtp_client
 molecule test --scenario-name acme_certificates
+molecule test --scenario-name ubuntu_k3s_node
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and
 `DOCKER_HOST` pointing to it, and the `docker` command, which can be Podman's. They also
-need this collection, `community.docker`, `community.crypto` and `community.general`
-on `ANSIBLE_COLLECTIONS_PATH`.
+need this collection, `ansible.posix`, `community.docker`, `community.crypto` and
+`community.general` on `ANSIBLE_COLLECTIONS_PATH`.
 
 Describe each change in a fragment under `changelogs/fragments/`, then generate
 the changelog at release time with `antsibull-changelog release`.

@@ -1,0 +1,37 @@
+---
+# One node at a time, and stop at the first failure, so that a change that breaks a
+# node never reaches the next one. It defaults to the k3s_nodes group, never to all.
+- name: Prepare k3s nodes one at a time
+  hosts: "{{ ubuntu_k3s_node_hosts | default('k3s_nodes') }}"
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  tasks:
+    - name: Prepare the node
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+
+    - name: Apply changes before checking the node
+      ansible.builtin.meta: flush_handlers
+
+    - name: Reboot the node
+      ansible.builtin.reboot:
+      when: ubuntu_k3s_node_reboot | default(false) | bool
+
+    # Read-only, so it also runs in check mode. Agents have no kubeconfig.
+    - name: Wait for the node to be Ready
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - wait
+          - --for=condition=Ready
+          - "node/{{ ubuntu_k3s_node_name | default(ansible_facts['nodename']) }}"
+          - --timeout=30s
+      register: __ubuntu_k3s_node_ready
+      until: __ubuntu_k3s_node_ready is succeeded
+      retries: 20
+      delay: 15
+      changed_when: false
+      check_mode: false
+      when: ubuntu_k3s_node_server | default(false) | bool

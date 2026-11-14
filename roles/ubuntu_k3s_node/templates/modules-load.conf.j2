@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Kernel modules Cilium uses.
+{% for module in ubuntu_k3s_node_cilium_modules %}
+{{ module }}
+{% endfor %}

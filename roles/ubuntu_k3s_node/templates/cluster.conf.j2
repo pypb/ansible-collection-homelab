@@ -1,0 +1,14 @@
+cluster:
+	name = {{ ubuntu_k3s_node_ocfs2_cluster_name }}
+	heartbeat_mode = local
+	node_count = {{ ubuntu_k3s_node_ocfs2_nodes | length }}
+
+{% for node in ubuntu_k3s_node_ocfs2_nodes | sort(attribute='number') %}
+node:
+	cluster = {{ ubuntu_k3s_node_ocfs2_cluster_name }}
+	number = {{ node['number'] }}
+	ip_port = {{ node['ip_port'] | default(7777) }}
+	ip_address = {{ node['ip_address'] }}
+	name = {{ node['name'] }}
+
+{% endfor %}

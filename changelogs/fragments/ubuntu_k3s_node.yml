@@ -1,0 +1,12 @@
+---
+minor_changes:
+  - ubuntu_k3s_node - new role that strips Ubuntu down to a minimal k3s node. It
+    purges unneeded and conflicting packages, masks units, sets sysctl settings,
+    blacklists kernel modules, and optionally loads Cilium's kernel modules and
+    turns off rp_filter for its interfaces. It also sets up NFS, cachefilesd, a
+    resolv.conf for k3s and mount watchdogs, and writes the Pod Security Admission
+    configuration and audit policy on k3s servers. Optionally, it sets up OCFS2
+    with its kernel module, the o2cb cluster stack and the mounts.
+  - ubuntu_k3s_node - new playbook that runs the ubuntu_k3s_node role on one node
+    at a time, and waits for k3s servers to be Ready before moving on.
+  - The collection now depends on ansible.posix 2.0.0 or newer.

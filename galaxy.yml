@@ -14,6 +14,7 @@ tags:
   - infrastructure
   - linux
 dependencies:
+  ansible.posix: ">=2.0.0"
   community.crypto: ">=3.1.1"
   community.docker: ">=5.0.0"
   community.general: ">=9.0.0"

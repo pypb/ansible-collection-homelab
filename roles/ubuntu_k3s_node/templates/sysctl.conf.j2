@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for key, value in __ubuntu_k3s_node_sysctl | dictsort %}
+{{ key }} = {{ value }}
+{% endfor %}

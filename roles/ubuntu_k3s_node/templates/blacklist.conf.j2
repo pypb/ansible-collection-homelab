@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for module in ubuntu_k3s_node_blacklisted_modules %}
+blacklist {{ module }}
+{% endfor %}

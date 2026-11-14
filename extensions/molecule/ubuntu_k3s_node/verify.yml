@@ -1,0 +1,190 @@
+---
+- name: Verify a server prepared for Cilium
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read package facts
+      ansible.builtin.package_facts:
+
+    - name: Check packages were installed and purged
+      ansible.builtin.assert:
+        that:
+          - "'nfs-common' in ansible_facts['packages']"
+          - "'motd-news-config' not in ansible_facts['packages']"
+          - "'ocfs2-tools' in ansible_facts['packages']"
+
+    - name: Read unit states
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, apt-daily.timer, molecule-missing.service]
+      register: __molecule_unit_states
+      changed_when: false
+      failed_when: false
+
+    - name: Read whether the masked timer runs
+      ansible.builtin.command:
+        argv: [systemctl, is-active, apt-daily.timer]
+      register: __molecule_unit_active
+      changed_when: false
+      failed_when: false
+
+    - name: Check units are masked, including ones that don't exist, and stopped
+      ansible.builtin.assert:
+        that:
+          - __molecule_unit_states['stdout_lines'] == ['masked', 'masked']
+          - __molecule_unit_active['stdout'] in ['inactive', 'failed']
+
+    - name: Read applied kernel settings
+      ansible.builtin.slurp:
+        src: "/proc/sys/net/ipv4/{{ item }}"
+      loop:
+        - tcp_keepalive_time
+        - conf/all/rp_filter
+        - tcp_fin_timeout
+      register: __molecule_sysctl
+
+    - name: Check the sysctl settings were applied
+      ansible.builtin.assert:
+        that:
+          - __molecule_sysctl['results'] | map(attribute='content') | map('b64decode') | map('trim') | list
+            == ['600', '0', '30']
+
+    - name: Read the written files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/modprobe.d/blacklist-unused-storage.conf
+        - /etc/modules-load.d/cilium.conf
+        - /etc/k8s/resolv.conf
+        - /var/lib/rancher/k3s/server/psa.yaml
+        - /var/lib/rancher/k3s/server/audit.yaml
+      register: __molecule_files
+
+    - name: Check the written files
+      ansible.builtin.assert:
+        that:
+          - __blacklist is search('^blacklist btrfs$', multiline=true)
+          - __modules is search('^xt_TPROXY$', multiline=true)
+          - __resolv is search('^nameserver 192.0.2.53\nnameserver 192.0.2.54\n', multiline=true)
+          - __psa['plugins'][0]['configuration']['exemptions']['namespaces'] == ['kube-system', 'molecule-system']
+          - __psa['plugins'][0]['configuration']['defaults']['enforce'] == 'privileged'
+          - __audit['kind'] == 'Policy'
+      vars:
+        __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+        __blacklist: "{{ __contents[0] }}"
+        __modules: "{{ __contents[1] }}"
+        __resolv: "{{ __contents[2] }}"
+        __psa: "{{ __contents[3] | from_yaml }}"
+        __audit: "{{ __contents[4] | from_yaml }}"
+
+    - name: Read the OCFS2 configuration
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/ocfs2/cluster.conf
+        - /etc/default/o2cb
+        - /etc/fstab
+      register: __molecule_ocfs2
+
+    # The expected file has the tabs that o2cb writes.
+    - name: Check the OCFS2 configuration  # noqa: no-tabs
+      ansible.builtin.assert:
+        that:
+          - __cluster_conf == __expected_cluster_conf
+          - __o2cb is search('^O2CB_ENABLED=true$', multiline=true)
+          - __o2cb is search('^O2CB_BOOTCLUSTER=molecule$', multiline=true)
+          - __o2cb is search('^O2CB_HEARTBEAT_THRESHOLD=31$', multiline=true)
+          - __fstab is search('^UUID=00000000-0000-0000-0000-000000000001 /srv/ocfs2-auto ocfs2 '
+            ~ '_netdev,noauto,x-systemd.automount,x-systemd.mount-timeout=90,x-systemd.idle-timeout=0,'
+            ~ 'x-systemd.after=o2cb.service 0 0$', multiline=true)
+          - __fstab is search('^/dev/disk/by-label/manual /srv/ocfs2-manual ocfs2 '
+            ~ '_netdev,noauto,x-systemd.after=o2cb.service 0 0$', multiline=true)
+      vars:
+        __contents: "{{ __molecule_ocfs2['results'] | map(attribute='content') | map('b64decode') | list }}"
+        __cluster_conf: "{{ __contents[0] }}"
+        __o2cb: "{{ __contents[1] }}"
+        __fstab: "{{ __contents[2] }}"
+        # The layout o2cb itself writes, with the nodes sorted by number.
+        __expected_cluster_conf: "cluster:\n\tname = molecule\n\theartbeat_mode = local\n\tnode_count = 2\n\n\
+          node:\n\tcluster = molecule\n\tnumber = 1\n\tip_port = 7778\n\tip_address = 192.0.2.11\n\tname = k3s-node-ubuntu2404\n\n\
+          node:\n\tcluster = molecule\n\tnumber = 2\n\tip_port = 7777\n\tip_address = 192.0.2.12\n\tname = k3s-node-ubuntu2604\n\n"
+
+    - name: Run the role on a node that isn't in the OCFS2 cluster
+      block:
+        - name: Prepare the node
+          ansible.builtin.include_role:
+            name: pypb.homelab.ubuntu_k3s_node
+          vars:
+            ubuntu_k3s_node_ocfs2: true
+            ubuntu_k3s_node_ocfs2_start: false
+            ubuntu_k3s_node_ocfs2_cluster_name: molecule
+            ubuntu_k3s_node_ocfs2_nodes:
+              - {name: elsewhere, number: 1, ip_address: 192.0.2.11}
+
+        - name: Fail, because the role should have failed
+          ansible.builtin.fail:
+            msg: The role accepted a node that isn't in the OCFS2 cluster
+      rescue:
+        - name: Check the role failed for the right reason
+          ansible.builtin.assert:
+            that: ansible_failed_result['msg'] is search("isn't a name in ubuntu_k3s_node_ocfs2_nodes")
+
+    - name: Read the mount watchdog timer
+      ansible.builtin.command:
+        argv: [systemctl, is-active, iscsi-mount-repair-_mnt_watched.timer]
+      register: __molecule_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Check the mount watchdog timer runs
+      ansible.builtin.assert:
+        that: __molecule_timer['stdout'] == 'active'
+
+    - name: Run the mount watchdog for a mounted path
+      ansible.builtin.systemd_service:
+        name: iscsi-mount-repair-_mnt_watched.service
+        state: started
+
+    - name: Look for a scheduled shutdown
+      ansible.builtin.stat:
+        path: /run/systemd/shutdown/scheduled
+      register: __molecule_shutdown
+
+    - name: Check the watchdog didn't schedule a reboot
+      ansible.builtin.assert:
+        that: not __molecule_shutdown['stat']['exists']
+
+    - name: Turn Cilium off again
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+      vars:
+        ubuntu_k3s_node_cilium: false
+
+    - name: Look for the Cilium files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/sysctl.d/99-zzz-override_cilium.conf
+        - /etc/modules-load.d/cilium.conf
+      register: __molecule_cilium_files
+
+    - name: Check the Cilium files were removed
+      ansible.builtin.assert:
+        that: __molecule_cilium_files['results'] | selectattr('stat.exists') | length == 0
+
+- name: Verify cloud-init is kept when it wrote the network configuration
+  hosts: cloud_init
+  gather_facts: false
+  tasks:
+    - name: Run the role
+      block:
+        - name: Prepare the node
+          ansible.builtin.include_role:
+            name: pypb.homelab.ubuntu_k3s_node
+
+        - name: Fail, because the role should have failed
+          ansible.builtin.fail:
+            msg: The role purged cloud-init although it wrote the network configuration
+      rescue:
+        - name: Check the role failed for the right reason
+          ansible.builtin.assert:
+            that: ansible_failed_result['msg'] is search('50-cloud-init.yaml')

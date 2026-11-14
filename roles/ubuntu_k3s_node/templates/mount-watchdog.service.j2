@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Reboot if {{ __ubuntu_k3s_node_path }} isn't mounted
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'mountpoint -q "{{ __ubuntu_k3s_node_path }}" || shutdown -r +2'

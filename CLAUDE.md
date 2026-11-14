@@ -11,8 +11,11 @@ migrated into `roles/`.
   - `restic_server_users`: manages logins on a containerised rest-server
   - `acme_certificates`: trusts private CAs, and requests certificates from an ACME
     server with DNS-01, installing them anywhere, including Unifi keystores
+  - `ubuntu_k3s_node`: strips Ubuntu down to a minimal k3s node, with OCFS2, sysctl,
+    NFS, mount watchdogs, Cilium prerequisites and the k3s server's PSA and audit files
 - Playbooks:
-  - `restic_backup`: combines both roles
+  - `restic_backup`: combines both restic roles
+  - `ubuntu_k3s_node`: runs `ubuntu_k3s_node` one node at a time
 - Plugins: none yet
 
 Update these lists, and the matching sections of `README.md`, when content is
@@ -25,8 +28,8 @@ added.
 - Lint: `yamllint .`, `ansible-lint` and `ruff check .`
 - Sanity tests: `ansible-test sanity --docker default`
 - Molecule: run `molecule test --scenario-name <name>` from `extensions/`, with
-  `ANSIBLE_COLLECTIONS_PATH` covering this collection, `community.docker`,
-  `community.crypto` and `community.general`.
+  `ANSIBLE_COLLECTIONS_PATH` covering this collection, `ansible.posix`,
+  `community.docker`, `community.crypto` and `community.general`.
   With Podman, also start the API socket and set `DOCKER_HOST`
 - Changelog: add a fragment to `changelogs/fragments/`, then run
   `antsibull-changelog release` when releasing

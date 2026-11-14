@@ -1,0 +1,25 @@
+---
+# k3s reads these when it starts, so a change takes effect at its next restart.
+- name: Create the k3s server log directory
+  ansible.builtin.file:
+    path: "{{ __ubuntu_k3s_node_server_dir }}/logs"
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+
+- name: Write the audit policy
+  ansible.builtin.copy:
+    src: audit.yaml
+    dest: "{{ __ubuntu_k3s_node_server_dir }}/audit.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Write the Pod Security Admission configuration
+  ansible.builtin.copy:
+    content: "{{ __ubuntu_k3s_node_psa | to_nice_yaml(indent=2) }}"
+    dest: "{{ __ubuntu_k3s_node_server_dir }}/psa.yaml"
+    owner: root
+    group: root
+    mode: "0600"

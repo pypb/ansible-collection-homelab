@@ -1,0 +1,13 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - k3s-node-ubuntu2404
+        - k3s-node-ubuntu2604
+        - k3s-node-cloud-init
