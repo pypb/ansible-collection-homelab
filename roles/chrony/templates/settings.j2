@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{% for __key, __value in chrony_settings | dictsort %}
+{% for __item in ([__value] if __value is string or __value is not iterable else __value) %}
+{% if __item is sameas true %}
+{{ __key }}
+{% elif __item is not sameas false and __item is not none %}
+{{ __key }} {{ __item }}
+{% endif %}
+{% endfor %}
+{% endfor %}

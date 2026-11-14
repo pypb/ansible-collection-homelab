@@ -54,6 +54,7 @@ jobs:
           - iscsi_initiator
           - server_baseline
           - unattended_upgrades
+          - chrony
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

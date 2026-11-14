@@ -1,0 +1,89 @@
+---
+- name: Verify chrony
+  hosts: targets
+  gather_facts: false
+  vars:
+    __molecule_ubuntu_pools: /etc/chrony/sources.d/ubuntu-ntp-pools.sources
+  tasks:
+    # chronyd -p prints the directives in chrony.conf and conf.d, but not the sources
+    # it reads from sources.d.
+    - name: Read the configuration chronyd sees
+      ansible.builtin.command:
+        argv: [sh, -c, "chronyd -p && find /etc/chrony/sources.d -name '*.sources' -exec cat {} +"]
+      register: __molecule_config
+      changed_when: false
+
+    - name: Check that only the role's sources and settings are used
+      ansible.builtin.assert:
+        that:
+          - __sources == ['server 192.0.2.1 iburst prefer', 'pool pool.ntp.org iburst maxpoll 12']
+          - "'minsources 1' in __lines"
+          - "'allow 192.0.2.0/24' in __lines"
+          - "'allow 198.51.100.0/24' in __lines"
+          - "'rtconutc' in __lines"
+          - __lines | select('match', '^noclientlog') | length == 0
+          - "'sourcedir /etc/chrony/sources.d' in __lines"
+        fail_msg: "{{ __lines }}"
+      vars:
+        __lines: "{{ __molecule_config['stdout_lines'] }}"
+        __sources: "{{ __lines | select('match', '^(server|pool|peer) ') | list }}"
+
+    - name: Read the chronyd options
+      ansible.builtin.command:
+        argv: [grep, '^DAEMON_OPTS=', /etc/default/chrony]
+      register: __molecule_opts
+      changed_when: false
+
+    - name: Read the sources chronyd uses
+      ansible.builtin.command:
+        argv: [chronyc, -n, sources]
+      register: __molecule_sources
+      changed_when: false
+
+    - name: Look for systemd-timesyncd
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, -f, '${db:Status-Status}', systemd-timesyncd]
+      register: __molecule_timesyncd
+      changed_when: false
+      failed_when: false
+
+    - name: Look for the Ubuntu pools
+      ansible.builtin.stat:
+        path: "{{ __molecule_ubuntu_pools }}.disabled"
+      register: __molecule_disabled
+
+    - name: Check that chronyd runs with the role's options and sources
+      ansible.builtin.assert:
+        that:
+          - __molecule_opts['stdout'] == 'DAEMON_OPTS="-F 1 -x"'
+          - "'192.0.2.1' in __molecule_sources['stdout']"
+          - __molecule_timesyncd['stdout'] in ['', 'not-installed', 'config-files'] or __molecule_timesyncd['rc'] != 0
+          - __molecule_disabled['stat']['exists'] == (inventory_hostname == 'chrony-ubuntu2604')
+
+    - name: Go back to the distribution's sources and settings
+      ansible.builtin.include_role:
+        name: pypb.homelab.chrony
+
+    - name: Read the configuration chronyd sees afterwards
+      ansible.builtin.command:
+        argv: [sh, -c, "chronyd -p && find /etc/chrony/sources.d -name '*.sources' -exec cat {} +"]
+      register: __molecule_restored
+      changed_when: false
+
+    - name: Look for the Ubuntu pools afterwards
+      ansible.builtin.stat:
+        path: "{{ __molecule_ubuntu_pools }}"
+      register: __molecule_enabled
+
+    - name: Check that the distribution's sources are back
+      ansible.builtin.assert:
+        that:
+          - __sources | length > 0
+          - __sources | select('match', '^[a-z]+ (192\.0\.2\.1|pool\.ntp\.org) ') | length == 0
+          - __lines | select('match', '^(minsources|allow) ') | length == 0
+          - __lines | select('search', 'ansible-disabled') | length == 0
+          - __molecule_enabled['stat']['exists'] == (inventory_hostname == 'chrony-ubuntu2604')
+        fail_msg: "{{ __lines }}"
+      vars:
+        __lines: "{{ __molecule_restored['stdout_lines'] }}"
+        __sources: "{{ __lines | select('match', '^(server|pool|peer) ') | list }}"

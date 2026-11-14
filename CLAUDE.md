@@ -19,6 +19,7 @@ migrated into `roles/`.
   - `server_baseline`: basic configuration of a Debian or Ubuntu server, including
     resolv.conf, motd and the kernel consoles and GRUB menu
   - `unattended_upgrades`: installs upgrades automatically, with reports and reboots
+  - `chrony`: keeps the clock in sync with chrony, using its drop-in directories
 - Playbooks:
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and

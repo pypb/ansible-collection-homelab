@@ -1,0 +1,24 @@
+---
+- name: Converge chrony with its own sources and settings
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up chrony
+      ansible.builtin.include_role:
+        name: pypb.homelab.chrony
+      vars:
+        chrony_servers:
+          - host: 192.0.2.1
+            options: [iburst, prefer]
+        chrony_pools:
+          - pool.ntp.org
+        chrony_source_options: [iburst, maxpoll 12]
+        chrony_settings:
+          minsources: 1
+          allow:
+            - 192.0.2.0/24
+            - 198.51.100.0/24
+          rtconutc: true
+          noclientlog: false
+        # The containers share the host's clock, which chronyd mustn't change.
+        chrony_daemon_opts: -F 1 -x

@@ -1,0 +1,7 @@
+---
+minor_changes:
+  - chrony - new role that keeps the clock in sync with chrony and purges the
+    other time daemons. It writes NTP servers, pools and other settings to
+    chrony's drop-in directories, checked with chronyd -p, and turns the
+    distribution's sources off while it has its own. A chrony.conf that doesn't
+    read the drop-in directories is replaced by the distribution's.
