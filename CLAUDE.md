@@ -12,7 +12,8 @@ migrated into `roles/`.
   - `acme_certificates`: trusts private CAs, and requests certificates from an ACME
     server with DNS-01, installing them anywhere, including Unifi keystores
   - `ubuntu_k3s_node`: strips Ubuntu down to a minimal k3s node, with sysctl, NFS,
-    mount watchdogs, Cilium prerequisites and the k3s server's PSA and audit files
+    mount watchdogs, Cilium prerequisites, stopping pods at shutdown and the k3s
+    server's PSA and audit files
   - `ocfs2`: sets up the OCFS2 cluster file system with o2cb, and its mounts
   - `iscsi_initiator`: sets up open-iscsi and logs in to targets, with optional multipathd
 - Playbooks:

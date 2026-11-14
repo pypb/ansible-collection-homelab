@@ -6,6 +6,7 @@ argument_specs:
       - Purges packages that conflict with k3s or that a node doesn't need, and masks units.
       - Sets sysctl settings and blacklists kernel modules, and optionally prepares the node for Cilium.
       - Sets up NFS, cachefilesd, a resolv.conf for k3s and watchdogs that reboot the node when a mount is missing.
+      - Stops the k3s pods at shutdown, before the file systems unmount.
       - On servers, writes the Pod Security Admission configuration and audit policy that k3s reads.
       - Doesn't install, configure or restart k3s. Run it before a k3s role such as C(xanmanning.k3s).
     author:
@@ -125,6 +126,21 @@ argument_specs:
         description:
           - Mount points to check every 15 minutes, starting 5 minutes after boot. The node reboots if one isn't mounted.
           - Paths must be absolute, without whitespace, quotes, C(%) or backslashes.
+      ubuntu_k3s_node_stop_pods_at_shutdown:
+        type: bool
+        default: true
+        description:
+          - Stop the k3s pods at shutdown, after k3s and before the file systems unmount, with the C(stop-k3s-pods.service) unit.
+          - k3s leaves its containers running when it stops, which keeps shared file systems such as OCFS2 from unmounting cleanly.
+          - False disables and removes the unit without stopping the pods.
+      ubuntu_k3s_node_k3s_service:
+        type: str
+        default: k3s.service
+        description: The k3s unit, which the pods are stopped after at shutdown.
+      ubuntu_k3s_node_k3s_killall:
+        type: path
+        default: /usr/local/bin/k3s-killall.sh
+        description: The script that stops k3s and its pods. Nothing happens at shutdown while it doesn't exist.
       ubuntu_k3s_node_psa_defaults:
         type: dict
         default:

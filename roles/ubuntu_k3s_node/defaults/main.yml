@@ -94,6 +94,15 @@ ubuntu_k3s_node_cachefilesd: true
 # Mount points to check every 15 minutes. The node reboots if one isn't mounted.
 ubuntu_k3s_node_mount_watchdog_paths: []
 
+# Stop the k3s pods at shutdown, after k3s and before the file systems unmount, so
+# that OCFS2 and other shared file systems unmount cleanly. k3s leaves them running.
+ubuntu_k3s_node_stop_pods_at_shutdown: true
+
+# The k3s unit, and the script that stops k3s and its pods, as the k3s install script
+# names them.
+ubuntu_k3s_node_k3s_service: k3s.service
+ubuntu_k3s_node_k3s_killall: /usr/local/bin/k3s-killall.sh
+
 # Pod Security Admission defaults for namespaces without their own labels.
 ubuntu_k3s_node_psa_defaults:
   enforce: privileged
