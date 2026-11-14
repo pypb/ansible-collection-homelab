@@ -1,0 +1,33 @@
+---
+__swap_required_facts:
+  - distribution_release
+  - kernel
+  - os_family
+  - virtualization_type
+  - virtualization_role
+
+# A container can't set up swap, and shares its host's sysctl settings.
+__swap_container: >-
+  {{ ansible_facts['virtualization_role'] == 'guest'
+     and ansible_facts['virtualization_type'] in ['container', 'containerd', 'docker', 'lxc', 'openvz', 'podman', 'systemd-nspawn'] }}
+
+__swap_zram_conf: /etc/systemd/zram-generator.conf
+__swap_zram_setup_unit: /usr/lib/systemd/system/systemd-zram-setup@.service
+
+__swap_zram_device_settings: >-
+  {{ {'zram-size': swap_zram_size,
+      'compression-algorithm': swap_zram_compression_algorithm,
+      'swap-priority': swap_zram_priority} | combine(swap_zram_settings) }}
+
+__swap_sysctl: >-
+  {{ (swap_zram_sysctl if swap_zram_enabled | bool else {}) | combine(swap_sysctl) }}
+
+__swap_encrypted_device: "/dev/mapper/{{ swap_encrypted_name }}"
+__swap_encrypted_options: "swap,plain,cipher={{ swap_encrypted_cipher }},size={{ swap_encrypted_key_size }}"
+
+# Ubuntu 24.04 has systemd-cryptsetup in the systemd package.
+__swap_cryptsetup_packages: "{{ [] if ansible_facts['distribution_release'] == 'noble' else ['systemd-cryptsetup'] }}"
+
+# The devices and files in use as swap now.
+__swap_active: >-
+  {{ (__swap_proc_swaps['content'] | b64decode).splitlines()[1:] | map('split') | map('first') | list }}

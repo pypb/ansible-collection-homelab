@@ -1,0 +1,7 @@
+---
+minor_changes:
+  - swap - new role that sets up swap in compressed RAM with systemd-zram-generator,
+    and optionally swap in a file on disk, encrypted with a new random key at
+    every boot through crypttab and fstab. It turns off and deletes other swap
+    files, removes fstab lines for zram devices, writes sysctl settings for swap,
+    and turns each kind of swap off again when it's disabled.

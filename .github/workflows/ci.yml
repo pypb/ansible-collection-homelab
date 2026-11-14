@@ -53,6 +53,7 @@ jobs:
           - ocfs2
           - iscsi_initiator
           - server_baseline
+          - swap
           - unattended_upgrades
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}

@@ -1,0 +1,32 @@
+---
+# Compressed swap in RAM, set up at boot by systemd-zram-generator.
+swap_zram_enabled: true
+# In MiB, as an expression of ram, the RAM in MiB.
+swap_zram_size: min(ram / 2, 4096)
+swap_zram_compression_algorithm: zstd
+swap_zram_priority: 100
+# Other zram-generator.conf settings for the device.
+swap_zram_settings: {}
+# Written while zram is on. swap_sysctl overrides them.
+swap_zram_sysctl:
+  vm.swappiness: 180
+  vm.page-cluster: 0
+  vm.watermark_boost_factor: 0
+  vm.watermark_scale_factor: 125
+
+# Swap on disk, in a file encrypted with a new random key at every boot.
+swap_encrypted_enabled: false
+swap_encrypted_name: cryptswap
+swap_encrypted_file: /var/swap.crypt
+swap_encrypted_size_mb: 512
+swap_encrypted_cipher: aes-xts-plain64
+swap_encrypted_key_size: 512
+# Lower than zram, so that it's used only when zram is full.
+swap_encrypted_priority: 10
+
+# Swap files to turn off and delete, such as Ubuntu's /swap.img.
+swap_removed_files: []
+
+# Other sysctl settings.
+swap_sysctl: {}
+swap_sysctl_file: 90-swap.conf

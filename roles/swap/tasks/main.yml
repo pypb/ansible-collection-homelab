@@ -1,0 +1,70 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: [min, virtual]
+  when: __swap_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - swap_zram_size | string is match('^[A-Za-z0-9 ()/*+.,-]+$')
+      - swap_zram_compression_algorithm is match('^[A-Za-z0-9-]+$')
+      - swap_zram_settings.keys() | reject('match', '^[a-z-]+$') | length == 0
+      - swap_zram_settings.values() | map('string') | select('search', '\n') | length == 0
+      - swap_encrypted_name is match('^[A-Za-z0-9_]+$')
+      - swap_encrypted_file is match('^/[A-Za-z0-9_./-]+$')
+      - swap_encrypted_cipher is match('^[a-z0-9-]+$')
+      - swap_encrypted_size_mb | int > 0
+      - swap_removed_files | reject('match', '^/[A-Za-z0-9_./-]+$') | length == 0
+      - swap_encrypted_file not in swap_removed_files
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. swap_zram_size must be an expression
+      such as min(ram / 2, 4096), and swap_zram_compression_algorithm an algorithm name.
+      The keys of swap_zram_settings must be zram-generator.conf settings, without line
+      breaks in their values. swap_encrypted_name may have only letters, digits and _,
+      swap_encrypted_file and swap_removed_files must be absolute paths, and
+      swap_encrypted_file can't also be removed.
+    quiet: true
+
+- name: Read the active swap
+  ansible.builtin.slurp:
+    src: /proc/swaps
+  register: __swap_proc_swaps
+
+- name: Set up zram swap
+  ansible.builtin.include_tasks: zram.yml
+
+- name: Set up encrypted swap
+  ansible.builtin.include_tasks: encrypted.yml
+
+- name: Remove swap files
+  ansible.builtin.include_tasks: removed.yml
+  when: swap_removed_files | length > 0
+
+# Minimal Debian installs don't have it.
+- name: Create the sysctl directory
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+  when: __swap_sysctl | length > 0
+
+- name: Write the sysctl settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: "/etc/sysctl.d/{{ swap_sysctl_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the sysctl settings
+  when: __swap_sysctl | length > 0
+
+# The settings stay until the next boot.
+- name: Remove the sysctl settings
+  ansible.builtin.file:
+    path: "/etc/sysctl.d/{{ swap_sysctl_file }}"
+    state: absent
+  when: __swap_sysctl | length == 0
