@@ -1,0 +1,10 @@
+" Vim loads defaults.vim, which turns the mouse on, after this file unless it has
+" been loaded already.
+if filereadable(expand('$VIMRUNTIME/defaults.vim'))
+  source $VIMRUNTIME/defaults.vim
+endif
+let g:skip_defaults_vim = 1
+
+" Leave the mouse to the terminal, so that it selects and pastes text.
+set mouse=
+set ttymouse=

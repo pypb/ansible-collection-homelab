@@ -1,0 +1,40 @@
+---
+# ports.ubuntu.com, for architectures other than amd64, is left alone.
+- name: Use the Ubuntu mirror
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/ubuntu.sources
+    regexp: '^URIs: http://(archive|security)\.ubuntu\.com/ubuntu/?$'
+    replace: "URIs: {{ server_baseline_ubuntu_mirror }}"
+  register: __server_baseline_mirror
+  when:
+    - __server_baseline_ubuntu | bool
+    - server_baseline_ubuntu_mirror | length > 0
+
+# A new mirror needs new package lists.
+- name: Install packages
+  ansible.builtin.apt:
+    name: "{{ __server_baseline_install }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if __server_baseline_mirror is changed else 3600 }}"
+  register: __server_baseline_install_result
+  when: __server_baseline_install | length > 0
+
+- name: Purge packages
+  ansible.builtin.apt:
+    name: "{{ __server_baseline_purge }}"
+    state: absent
+    purge: true
+  when: __server_baseline_purge | length > 0
+
+- name: Remove packages that nothing depends on any more
+  ansible.builtin.apt:
+    autoremove: true
+    purge: true
+  when: server_baseline_autoremove | bool
+
+- name: Empty the package cache
+  ansible.builtin.apt:
+    clean: true
+  changed_when: false
+  when: server_baseline_apt_clean | bool

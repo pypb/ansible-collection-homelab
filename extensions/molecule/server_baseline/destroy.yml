@@ -1,0 +1,13 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - baseline-debian13
+        - baseline-ubuntu2404
+        - baseline-ubuntu2604

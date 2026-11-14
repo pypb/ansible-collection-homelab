@@ -16,6 +16,8 @@ migrated into `roles/`.
     server's PSA and audit files
   - `ocfs2`: sets up the OCFS2 cluster file system with o2cb, and its mounts
   - `iscsi_initiator`: sets up open-iscsi and logs in to targets, with optional multipathd
+  - `server_baseline`: basic configuration of a Debian or Ubuntu server, including
+    resolv.conf, motd and the kernel consoles and GRUB menu
 - Playbooks:
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and

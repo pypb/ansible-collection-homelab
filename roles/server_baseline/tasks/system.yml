@@ -1,0 +1,95 @@
+---
+# Minimal Debian installs don't have it.
+- name: Create the sysctl directory
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+
+- name: Write the sysctl settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: "/etc/sysctl.d/{{ server_baseline_sysctl_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the sysctl settings
+
+# In check mode, tzdata may not be installed yet.
+- name: Set the time zone
+  community.general.timezone:
+    name: "{{ server_baseline_timezone }}"
+  when:
+    - server_baseline_timezone | length > 0
+    - not __server_baseline_pending | bool
+
+# In check mode, sudo may not be installed yet, and visudo can't check the file.
+- name: Set how long sudo remembers a password
+  ansible.builtin.copy:
+    content: "Defaults timestamp_timeout={{ server_baseline_sudo_timestamp_timeout | int }}\n"
+    dest: /etc/sudoers.d/timeout
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  when:
+    - server_baseline_sudo_timestamp_timeout is not none
+    - not __server_baseline_pending | bool
+
+- name: Look for the vim configuration directory
+  ansible.builtin.stat:
+    path: /etc/vim
+  register: __server_baseline_vim
+  when: server_baseline_vim_disable_mouse | bool
+
+- name: Turn off the mouse in vim
+  ansible.builtin.copy:
+    src: vimrc.local
+    dest: /etc/vim/vimrc.local
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - server_baseline_vim_disable_mouse | bool
+    - __server_baseline_vim['stat']['exists']
+
+# Takes effect at the next boot.
+- name: Mount /tmp as tmpfs at boot
+  ansible.builtin.systemd_service:
+    name: tmp.mount
+    enabled: true
+  when:
+    - server_baseline_tmp_tmpfs | bool
+    - not __server_baseline_lxc | bool
+
+- name: Look for the motd-news configuration
+  ansible.builtin.stat:
+    path: /etc/default/motd-news
+  register: __server_baseline_motd_news
+  when: not server_baseline_motd_news | bool
+
+- name: Turn off motd-news
+  ansible.builtin.lineinfile:
+    path: /etc/default/motd-news
+    regexp: "^ENABLED="
+    line: ENABLED=0
+  when:
+    - not server_baseline_motd_news | bool
+    - __server_baseline_motd_news['stat']['exists']
+
+- name: Write the message of the day and login banners
+  ansible.builtin.copy:
+    content: "{{ item['content'] }}"
+    dest: "{{ item['dest'] }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {dest: /etc/motd, content: "{{ server_baseline_motd }}"}
+    - {dest: /etc/issue, content: "{{ server_baseline_issue }}"}
+    - {dest: /etc/issue.net, content: "{{ server_baseline_issue_net }}"}
+  loop_control:
+    label: "{{ item['dest'] }}"
+  when: item['content'] is not none

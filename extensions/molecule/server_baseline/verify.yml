@@ -1,0 +1,147 @@
+---
+- name: Verify the configured servers
+  hosts: targets
+  gather_facts: false
+  vars:
+    __molecule_grub: "{{ inventory_hostname != 'baseline-ubuntu2604' }}"
+    __molecule_ubuntu: "{{ inventory_hostname != 'baseline-debian13' }}"
+  tasks:
+    - name: Read package facts
+      ansible.builtin.package_facts:
+
+    - name: Check packages were installed and purged
+      ansible.builtin.assert:
+        that:
+          - "'tzdata' in ansible_facts['packages']"
+          - "'sudo' in ansible_facts['packages']"
+          - "'nano' not in ansible_facts['packages']"
+          - "'python3-debian' in ansible_facts['packages'] or not __molecule_ubuntu | bool"
+
+    - name: Read the written files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/hosts
+        - /etc/mailname
+        - /etc/resolv.conf
+        - /etc/sudoers.d/timeout
+        - /etc/issue
+        - /etc/NetworkManager/conf.d/dns.conf
+        - /etc/dhcp/dhclient-enter-hooks.d/disable_resolvconf_update
+        - /etc/vim/vimrc.local
+      register: __molecule_files
+
+    - name: Check the written files
+      ansible.builtin.assert:
+        that:
+          - __contents[0] is search('^127\.0\.1\.1 ' ~ inventory_hostname ~ '\.example\.com ' ~ inventory_hostname ~ '$', multiline=true)
+            or not __molecule_ubuntu | bool
+          - __contents[0] is not search('127\.0\.1\.1') or __molecule_ubuntu | bool
+          - __contents[0] is not search('placeholder')
+          - __contents[1] == inventory_hostname ~ '.example.com\n'
+          - __contents[2] is search('^search example\.com$', multiline=true)
+          - __contents[2] is search('^nameserver ', multiline=true)
+          - __contents[2] is search('^options edns0 timeout:2$', multiline=true)
+          - __contents[3] == 'Defaults timestamp_timeout=30\n'
+          - __contents[4] == 'Authorised use only.\n'
+          - __contents[5] is search('^dns=none$', multiline=true)
+          - __contents[6] is search('make_resolv_conf')
+          - __contents[7] is search('^set mouse=$', multiline=true)
+      vars:
+        __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+
+    - name: Read whether resolv.conf is a link
+      ansible.builtin.stat:
+        path: /etc/resolv.conf
+        follow: false
+      register: __molecule_resolv
+
+    - name: Check resolv.conf replaced the link
+      ansible.builtin.assert:
+        that: not __molecule_resolv['stat']['islnk']
+
+    - name: Read the Ubuntu package sources
+      ansible.builtin.slurp:
+        src: /etc/apt/sources.list.d/ubuntu.sources
+      register: __molecule_sources
+      when: __molecule_ubuntu | bool
+
+    - name: Check the Ubuntu mirror replaced the security archive
+      ansible.builtin.assert:
+        that: __molecule_sources['content'] | b64decode is not search('security\.ubuntu\.com')
+      when: __molecule_ubuntu | bool
+
+    - name: Read the time zone and a sysctl setting
+      ansible.builtin.command:
+        argv: [sh, -c, "readlink /etc/localtime; cat /proc/sys/net/ipv4/conf/all/send_redirects"]
+      register: __molecule_system
+      changed_when: false
+
+    - name: Check the time zone and sysctl setting
+      ansible.builtin.assert:
+        that:
+          - __molecule_system['stdout_lines'][0] is search('Asia/Tokyo$')
+          - __molecule_system['stdout_lines'][1] == '0'
+
+    - name: Read whether tmp.mount is enabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, tmp.mount]
+      register: __molecule_tmp
+      changed_when: false
+      failed_when: false
+      when: not __molecule_ubuntu | bool
+
+    - name: Check tmp.mount is enabled
+      ansible.builtin.assert:
+        that: __molecule_tmp['stdout'] in ['enabled', 'static', 'generated']
+      when: not __molecule_ubuntu | bool
+
+    - name: Read the motd-news setting
+      ansible.builtin.command:
+        argv: [grep, -x, ENABLED=0, /etc/default/motd-news]
+      changed_when: false
+      when: __molecule_ubuntu | bool
+
+    # update-grub reads the settings the same way.
+    - name: Read the GRUB settings
+      ansible.builtin.shell:
+        cmd: |
+          . /etc/default/grub
+          for f in /etc/default/grub.d/*.cfg; do . "$f"; done
+          printf '%s\n' "$GRUB_CMDLINE_LINUX_DEFAULT" "$GRUB_CMDLINE_LINUX" "$GRUB_TIMEOUT" \
+            "$GRUB_TIMEOUT_STYLE" "$GRUB_TERMINAL" "$GRUB_SERIAL_COMMAND"
+      register: __molecule_grub_settings
+      changed_when: false
+      when: __molecule_grub | bool
+
+    - name: Check the GRUB settings
+      ansible.builtin.assert:
+        that: __molecule_grub_settings['stdout_lines'] ==
+          ['console=ttyS0 console=tty1', 'net.ifnames=0', '5', 'menu', 'console serial', 'serial --unit=0 --speed=115200']
+      when: __molecule_grub | bool
+
+    - name: Read the Raspberry Pi kernel command line
+      ansible.builtin.slurp:
+        src: /boot/firmware/cmdline.txt
+      register: __molecule_cmdline
+      when: not __molecule_grub | bool
+
+    - name: Check the consoles replaced the earlier ones
+      ansible.builtin.assert:
+        that: __molecule_cmdline['content'] | b64decode ==
+          'multipath=off root=LABEL=writable rootwait console=ttyS0 console=tty1\n'
+      when: not __molecule_grub | bool
+
+    - name: Stop managing the consoles and boot menu
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_baseline
+        tasks_from: console.yml
+
+    - name: Look for the GRUB settings
+      ansible.builtin.stat:
+        path: /etc/default/grub.d/99-server-baseline.cfg
+      register: __molecule_dropin
+
+    - name: Check the GRUB settings were removed
+      ansible.builtin.assert:
+        that: not __molecule_dropin['stat']['exists']

@@ -1,0 +1,143 @@
+---
+argument_specs:
+  main:
+    short_description: Basic configuration of a Debian or Ubuntu server.
+    description:
+      - Installs and purges packages, and optionally points Ubuntu at an archive mirror.
+      - Sets the host's domain name in /etc/hosts and /etc/mailname, and optionally writes a static, immutable resolv.conf.
+      - Sets sysctl settings, the time zone, the sudo password timeout, vim's mouse, /tmp as tmpfs and Ubuntu's motd-news.
+      - Writes the message of the day and the login banners.
+      - Sets the kernel consoles and the GRUB menu, or the consoles on a Raspberry Pi's kernel command line.
+    author:
+      - pypb
+    options:
+      server_baseline_packages:
+        type: list
+        elements: str
+        default: []
+        description: Packages to install.
+      server_baseline_purged_packages:
+        type: list
+        elements: str
+        default: []
+        description: Packages to purge.
+      server_baseline_ubuntu_packages:
+        type: list
+        elements: str
+        default: [python3-debian, ssl-cert]
+        description: Packages to install on Ubuntu.
+      server_baseline_ubuntu_purged_packages:
+        type: list
+        elements: str
+        default: [fonts-lato, landscape-common, lxd-agent-loader, ubuntu-advantage-tools, ubuntu-pro-client, update-manager-core, update-notifier-common]
+        description: Packages to purge on Ubuntu.
+      server_baseline_vm_purged_packages:
+        type: list
+        elements: str
+        default: [fwupd, fwupd-signed, smartmontools, udisks2]
+        description: Packages to purge on virtual machines and containers, which have no hardware to manage.
+      server_baseline_autoremove:
+        type: bool
+        default: false
+        description: Purge the packages that nothing depends on any more.
+      server_baseline_apt_clean:
+        type: bool
+        default: false
+        description: Empty the package cache.
+      server_baseline_ubuntu_mirror:
+        type: str
+        default: ""
+        description:
+          - Ubuntu archive mirror for archive.ubuntu.com and security.ubuntu.com in C(/etc/apt/sources.list.d/ubuntu.sources).
+          - C(ports.ubuntu.com), for architectures other than amd64, is left alone. Not changed when empty.
+      server_baseline_domain:
+        type: str
+        default: ""
+        description:
+          - DNS domain of the host, for C(/etc/mailname), the resolv.conf search domain and the C(127.0.1.1) line in C(/etc/hosts).
+          - That line is only changed when it exists, since hosts such as Proxmox VE need their name to resolve to their real address.
+          - Not managed when empty.
+      server_baseline_nameservers:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Nameservers for a static C(/etc/resolv.conf). Not managed when empty.
+          - Stops NetworkManager and dhclient from writing the file, and purges resolvconf and openresolv.
+      server_baseline_dns_search:
+        type: list
+        elements: str
+        description: Search domains for resolv.conf. When not set, C(server_baseline_domain).
+      server_baseline_resolv_options:
+        type: list
+        elements: str
+        default: [edns0, "timeout:2"]
+        description: Options for resolv.conf.
+      server_baseline_resolv_conf_immutable:
+        type: bool
+        default: true
+        description: Make resolv.conf immutable, so that nothing else rewrites it.
+      server_baseline_sysctl_file:
+        type: str
+        default: 90-server-baseline.conf
+        description: Name of the sysctl file in C(/etc/sysctl.d).
+      server_baseline_sysctl:
+        type: dict
+        default:
+          net.ipv4.conf.all.accept_redirects: 0
+          net.ipv4.conf.default.accept_redirects: 0
+          net.ipv6.conf.all.accept_redirects: 0
+          net.ipv6.conf.default.accept_redirects: 0
+          net.ipv4.conf.all.secure_redirects: 0
+          net.ipv4.conf.default.secure_redirects: 0
+          net.ipv4.conf.all.send_redirects: 0
+          net.ipv4.conf.default.send_redirects: 0
+        description: Sysctl settings. The default ignores and sends no ICMP redirects.
+      server_baseline_timezone:
+        type: str
+        default: ""
+        description: Time zone, such as C(Europe/Berlin). Not changed when empty.
+      server_baseline_sudo_timestamp_timeout:
+        type: int
+        description: Minutes that sudo remembers a password. Not managed when not set. Installs sudo.
+      server_baseline_vim_disable_mouse:
+        type: bool
+        default: false
+        description: Turn off the mouse in vim, so that the terminal selects and pastes text.
+      server_baseline_tmp_tmpfs:
+        type: bool
+        default: false
+        description: Mount C(/tmp) as tmpfs with C(tmp.mount), from the next boot. Debian only.
+      server_baseline_motd_news:
+        type: bool
+        default: true
+        description: Show Ubuntu's news in the message of the day. False turns it off.
+      server_baseline_motd:
+        type: str
+        description: Contents of C(/etc/motd). Not managed when not set.
+      server_baseline_issue:
+        type: str
+        description: Contents of C(/etc/issue), shown before console logins. Not managed when not set.
+      server_baseline_issue_net:
+        type: str
+        description: Contents of C(/etc/issue.net), which sshd can show as its banner. Not managed when not set.
+      server_baseline_kernel_consoles:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Kernel consoles, such as C([ttyS0, tty1]), replacing the ones set before. Not managed when empty.
+          - The kernel writes its messages to all of them. C(/dev/console), and with it systemd's status, is the last one.
+          - Takes effect at the next boot.
+      server_baseline_grub_timeout:
+        type: int
+        description: Seconds GRUB shows its menu for. Not managed when not set.
+      server_baseline_grub_terminals:
+        type: list
+        elements: str
+        default: []
+        description: GRUB terminals, such as C([console, serial]). Not managed when empty.
+      server_baseline_grub_serial_command:
+        type: str
+        default: serial --unit=0 --speed=115200
+        description: GRUB serial port settings, used when C(server_baseline_grub_terminals) has C(serial).

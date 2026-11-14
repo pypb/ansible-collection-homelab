@@ -1,0 +1,36 @@
+---
+- name: Converge servers with every setting
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the container's resolver settings
+      ansible.builtin.slurp:
+        src: /etc/resolv.conf.molecule
+      register: __molecule_resolv
+
+    - name: Configure the server
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_baseline
+      vars:
+        server_baseline_packages: [tzdata, vim-tiny]
+        server_baseline_purged_packages: [nano]
+        server_baseline_autoremove: true
+        server_baseline_apt_clean: true
+        server_baseline_ubuntu_mirror: http://archive.ubuntu.com/ubuntu
+        server_baseline_domain: example.com
+        # The container's own resolvers, so that apt keeps working.
+        server_baseline_nameservers: "{{ __molecule_resolv['content'] | b64decode
+                                         | regex_findall('(?m)^nameserver\\s+(\\S+)') }}"
+        # Overlay file systems have no file attributes.
+        server_baseline_resolv_conf_immutable: false
+        server_baseline_timezone: Asia/Tokyo
+        server_baseline_sudo_timestamp_timeout: 30
+        server_baseline_vim_disable_mouse: true
+        server_baseline_tmp_tmpfs: "{{ inventory_hostname == 'baseline-debian13' }}"
+        server_baseline_motd_news: false
+        server_baseline_motd: ""
+        server_baseline_issue: "Authorised use only.\n"
+        server_baseline_issue_net: "Authorised use only.\n"
+        server_baseline_kernel_consoles: [ttyS0, tty1]
+        server_baseline_grub_timeout: 5
+        server_baseline_grub_terminals: [console, serial]

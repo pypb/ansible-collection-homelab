@@ -1,0 +1,99 @@
+---
+# Packages to install and to purge on every host.
+server_baseline_packages: []
+server_baseline_purged_packages: []
+
+# Packages to install and to purge on Ubuntu only.
+server_baseline_ubuntu_packages:
+  - python3-debian
+  - ssl-cert
+server_baseline_ubuntu_purged_packages:
+  - fonts-lato
+  - landscape-common
+  - lxd-agent-loader
+  - ubuntu-advantage-tools
+  - ubuntu-pro-client
+  - update-manager-core
+  - update-notifier-common
+
+# Packages to purge on virtual machines and containers, which have no hardware to manage.
+server_baseline_vm_purged_packages:
+  - fwupd
+  - fwupd-signed
+  - smartmontools
+  - udisks2
+
+# Remove the packages nothing depends on any more, and empty the package cache.
+server_baseline_autoremove: false
+server_baseline_apt_clean: false
+
+# Ubuntu archive mirror for archive.ubuntu.com and security.ubuntu.com in
+# /etc/apt/sources.list.d/ubuntu.sources, such as http://de.archive.ubuntu.com/ubuntu.
+# Not changed when empty.
+server_baseline_ubuntu_mirror: ""
+
+# DNS domain of the host. Sets /etc/mailname, the resolv.conf search domain and
+# an existing 127.0.1.1 line in /etc/hosts. Not managed when empty.
+server_baseline_domain: ""
+
+# Nameservers for a static /etc/resolv.conf. Not managed when empty.
+server_baseline_nameservers: []
+#  - 192.0.2.53
+#  - 192.0.2.54
+
+# Search domains for resolv.conf. Null means server_baseline_domain.
+server_baseline_dns_search:
+
+# Options for resolv.conf.
+server_baseline_resolv_options:
+  - edns0
+  - timeout:2
+
+# Make resolv.conf immutable, so that nothing else rewrites it.
+server_baseline_resolv_conf_immutable: true
+
+# Settings for /etc/sysctl.d/<server_baseline_sysctl_file>.
+server_baseline_sysctl_file: 90-server-baseline.conf
+server_baseline_sysctl:
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+
+# Time zone, such as Europe/Berlin. Not changed when empty.
+server_baseline_timezone: ""
+
+# Minutes that sudo remembers a password. Not managed when null. Installs sudo.
+server_baseline_sudo_timestamp_timeout:
+
+# Turn off the mouse in vim, so that the terminal selects and pastes text.
+server_baseline_vim_disable_mouse: false
+
+# Mount /tmp as tmpfs with tmp.mount. Debian only.
+server_baseline_tmp_tmpfs: false
+
+# Show Ubuntu's news in the message of the day.
+server_baseline_motd_news: true
+
+# Contents of /etc/motd, /etc/issue and /etc/issue.net. Not managed when null.
+server_baseline_motd:
+server_baseline_issue:
+server_baseline_issue_net:
+
+# Kernel consoles, for example [ttyS0, tty1]. The kernel writes its messages to
+# all of them. /dev/console, and with it systemd's status, is the last one.
+# Not managed when empty.
+server_baseline_kernel_consoles: []
+
+# Seconds GRUB shows its menu for. Not managed when null.
+server_baseline_grub_timeout:
+
+# GRUB terminals, for example [console, serial]. Not managed when empty.
+server_baseline_grub_terminals: []
+
+# GRUB serial port settings, used when server_baseline_grub_terminals has serial.
+server_baseline_grub_serial_command: serial --unit=0 --speed=115200

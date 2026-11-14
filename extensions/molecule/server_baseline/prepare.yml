@@ -1,0 +1,94 @@
+---
+- name: Prepare hosts like freshly installed servers
+  hosts: targets
+  gather_facts: false
+  vars:
+    __molecule_grub: "{{ inventory_hostname != 'baseline-ubuntu2604' }}"
+  tasks:
+    # The container engine mounts these over the image's files, and they can't be
+    # replaced while mounted. The resolver settings are kept for converge.
+    - name: Keep the container's resolver settings
+      ansible.builtin.command:
+        argv: [cp, /etc/resolv.conf, /etc/resolv.conf.molecule]
+        creates: /etc/resolv.conf.molecule
+
+    - name: Unmount the files the container engine provides
+      ansible.builtin.command:
+        argv: [umount, "{{ item }}"]
+      loop: [/etc/resolv.conf, /etc/hosts]
+      register: __molecule_umount
+      changed_when: true
+      failed_when: __molecule_umount['rc'] != 0 and 'not mounted' not in __molecule_umount['stderr']
+
+    # Ubuntu's resolv.conf is a link to the systemd-resolved stub file.
+    - name: Link resolv.conf like systemd-resolved
+      ansible.builtin.file:
+        src: /etc/resolv.conf.molecule
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+      when: inventory_hostname == 'baseline-ubuntu2604'
+
+    - name: Restore resolv.conf as a file
+      ansible.builtin.copy:
+        src: /etc/resolv.conf.molecule
+        dest: /etc/resolv.conf
+        remote_src: true
+        mode: "0644"
+      when: inventory_hostname != 'baseline-ubuntu2604'
+
+    # Debian 13 has none, like a Proxmox VE host.
+    - name: Write a hosts file with another name for 127.0.1.1
+      ansible.builtin.copy:
+        content: "127.0.0.1 localhost\n{{ '' if inventory_hostname == 'baseline-debian13' else '127.0.1.1 placeholder\n' }}"
+        dest: /etc/hosts
+        mode: "0644"
+
+    - name: Create the NetworkManager, dhclient and GRUB configuration directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ ['/etc/NetworkManager/conf.d', '/etc/dhcp/dhclient-enter-hooks.d']
+                + (['/etc/default/grub.d'] if __molecule_grub | bool else ['/boot/firmware']) }}"
+
+    - name: Write GRUB settings like a cloud image
+      ansible.builtin.copy:
+        content: "{{ item['content'] }}"
+        dest: "{{ item['dest'] }}"
+        mode: "0644"
+      loop:
+        - dest: /etc/default/grub
+          content: |
+            GRUB_DEFAULT=0
+            GRUB_TIMEOUT_STYLE=hidden
+            GRUB_TIMEOUT=0
+            GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+            GRUB_CMDLINE_LINUX="console=hvc0 net.ifnames=0"
+        - dest: /etc/default/grub.d/50-cloudimg-settings.cfg
+          content: |
+            GRUB_RECORDFAIL_TIMEOUT=0
+            GRUB_TIMEOUT=0
+            GRUB_CMDLINE_LINUX_DEFAULT="console=tty1 console=ttyS0"
+            GRUB_TERMINAL=console
+      loop_control:
+        label: "{{ item['dest'] }}"
+      when: __molecule_grub | bool
+
+    - name: Write a Raspberry Pi kernel command line
+      ansible.builtin.copy:
+        content: "console=serial0,115200 multipath=off console=tty1 root=LABEL=writable rootwait\n"
+        dest: /boot/firmware/cmdline.txt
+        mode: "0755"
+      when: not __molecule_grub | bool
+
+    - name: Turn on motd-news like Ubuntu
+      ansible.builtin.copy:
+        content: "ENABLED=1\nURLS=\"https://motd.ubuntu.com\"\n"
+        dest: /etc/default/motd-news
+        mode: "0644"
+      when: inventory_hostname != 'baseline-debian13'
+
+    - name: Install a package for the role to purge
+      ansible.builtin.apt:
+        name: nano
