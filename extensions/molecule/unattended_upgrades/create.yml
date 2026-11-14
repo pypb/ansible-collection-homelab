@@ -1,0 +1,49 @@
+---
+- name: Create test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars:
+    __molecule_platforms:
+      - name: upgrades-debian13
+        image: docker.io/library/debian:13
+      - name: upgrades-ubuntu2404
+        image: docker.io/library/ubuntu:24.04
+      - name: upgrades-ubuntu2604
+        image: docker.io/library/ubuntu:26.04
+  tasks:
+    # The CLI works with both Docker and Podman. The image build module needs buildx.
+    - name: Build systemd test images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --build-arg
+          - "BASE_IMAGE={{ item['image'] }}"
+          - --tag
+          - "localhost/molecule-{{ item['name'] }}:latest"
+          - --file
+          - "{{ playbook_dir }}/Containerfile"
+          - "{{ playbook_dir }}"
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: false
+
+    - name: Start systemd test containers
+      community.docker.docker_container:
+        name: "{{ item['name'] }}"
+        image: "localhost/molecule-{{ item['name'] }}:latest"
+        hostname: "{{ item['name'] }}"
+        command: /lib/systemd/systemd
+        privileged: true
+        cgroupns_mode: host
+        volumes:
+          - /sys/fs/cgroup:/sys/fs/cgroup:rw
+        tmpfs:
+          - /run
+          - /run/lock
+          - /tmp
+        state: started
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"

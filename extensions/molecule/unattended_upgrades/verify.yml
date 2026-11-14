@@ -1,0 +1,58 @@
+---
+- name: Verify automatic upgrades
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the apt settings
+      ansible.builtin.command:
+        argv: [apt-config, dump]
+      register: __molecule_apt
+      changed_when: false
+
+    - name: Check the settings apt sees
+      ansible.builtin.assert:
+        that:
+          - "'APT::Periodic::Update-Package-Lists \"1\";' in __lines"
+          - "'APT::Periodic::Unattended-Upgrade \"1\";' in __lines"
+          - "'Unattended-Upgrade::Mail \"root\";' in __lines"
+          - "'Unattended-Upgrade::MailReport \"only-on-error\";' in __lines"
+          - "'Unattended-Upgrade::Automatic-Reboot \"true\";' in __lines"
+          - "'Unattended-Upgrade::Automatic-Reboot-Time \"03:30\";' in __lines"
+          - "'Unattended-Upgrade::Automatic-Reboot-WithUsers \"false\";' in __lines"
+          - "'Unattended-Upgrade::Remove-Unused-Dependencies \"true\";' in __lines"
+          - "'Unattended-Upgrade::SyslogEnable \"true\";' in __lines"
+          - "'Unattended-Upgrade::Package-Blacklist:: \"molecule-.*\";' in __lines"
+      vars:
+        __lines: "{{ __molecule_apt['stdout_lines'] }}"
+
+    - name: Read the apt timers
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, apt-daily.timer, apt-daily-upgrade.timer]
+      register: __molecule_timers
+      changed_when: false
+
+    - name: Check the apt timers are enabled
+      ansible.builtin.assert:
+        that: __molecule_timers['stdout_lines'] == ['enabled', 'enabled']
+
+    # Reads the settings, without upgrading anything.
+    - name: Run unattended-upgrades without upgrading
+      ansible.builtin.command:
+        argv: [unattended-upgrade, --dry-run]
+      changed_when: false
+
+    - name: Turn unattended-upgrades off
+      ansible.builtin.include_role:
+        name: pypb.homelab.unattended_upgrades
+      vars:
+        unattended_upgrades_enabled: false
+
+    - name: Read whether unattended-upgrades runs
+      ansible.builtin.command:
+        argv: [apt-config, shell, __value, APT::Periodic::Unattended-Upgrade]
+      register: __molecule_periodic
+      changed_when: false
+
+    - name: Check unattended-upgrades doesn't run
+      ansible.builtin.assert:
+        that: __molecule_periodic['stdout'] == "__value='0'"

@@ -1,0 +1,19 @@
+---
+- name: Converge automatic upgrades with every setting
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up unattended-upgrades
+      ansible.builtin.include_role:
+        name: pypb.homelab.unattended_upgrades
+      vars:
+        unattended_upgrades_mail: root
+        unattended_upgrades_mail_report: only-on-error
+        unattended_upgrades_automatic_reboot: true
+        unattended_upgrades_automatic_reboot_time: "03:30"
+        unattended_upgrades_remove_unused_dependencies: true
+        unattended_upgrades_syslog: true
+        unattended_upgrades_settings:
+          Unattended-Upgrade::Automatic-Reboot-WithUsers: false
+          Unattended-Upgrade::Package-Blacklist:
+            - molecule-.*

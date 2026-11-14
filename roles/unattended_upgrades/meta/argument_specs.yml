@@ -1,0 +1,52 @@
+---
+argument_specs:
+  main:
+    short_description: Install upgrades automatically with unattended-upgrades.
+    description:
+      - Installs unattended-upgrades and turns the daily package list updates and upgrades on or off.
+      - Writes the reports, reboot and cleanup settings, and any other apt settings, to one file that overrides the distribution's.
+    author:
+      - pypb
+    options:
+      unattended_upgrades_enabled:
+        type: bool
+        default: true
+        description:
+          - Install unattended-upgrades and run it every day.
+          - False stops it from running, but leaves the package installed.
+      unattended_upgrades_update_package_lists:
+        type: bool
+        default: true
+        description: Update the package lists every day.
+      unattended_upgrades_mail:
+        type: str
+        default: ""
+        description: Where reports go, such as C(root). Needs a working sendmail or mail command. No mail when empty.
+      unattended_upgrades_mail_report:
+        type: str
+        default: on-change
+        choices: [always, only-on-error, on-change]
+        description: When to send a report.
+      unattended_upgrades_automatic_reboot:
+        type: bool
+        default: false
+        description: Reboot when an upgrade needs it, at C(unattended_upgrades_automatic_reboot_time).
+      unattended_upgrades_automatic_reboot_time:
+        type: str
+        default: now
+        description: When to reboot, C(now) or a time such as C(02:00).
+      unattended_upgrades_remove_unused_dependencies:
+        type: bool
+        default: false
+        description: Purge the packages that upgrades leave unneeded.
+      unattended_upgrades_syslog:
+        type: bool
+        default: false
+        description: Log to syslog as well as to C(/var/log/unattended-upgrades).
+      unattended_upgrades_settings:
+        type: dict
+        default: {}
+        description:
+          - Other apt settings, by their full names, such as C(Unattended-Upgrade::Automatic-Reboot-WithUsers).
+          - A list adds to the distribution's list of the same name, such as C(Unattended-Upgrade::Origins-Pattern).
+          - These override the role's other variables.

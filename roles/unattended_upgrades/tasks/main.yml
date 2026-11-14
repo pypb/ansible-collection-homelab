@@ -1,0 +1,60 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: "'os_family' not in ansible_facts"
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - unattended_upgrades_mail_report in ['always', 'only-on-error', 'on-change']
+      - unattended_upgrades_automatic_reboot_time is match('^(now|([01]?[0-9]|2[0-3]):[0-5][0-9])$')
+      - unattended_upgrades_settings.keys() | reject('match', '^[A-Za-z0-9_-]+(::[A-Za-z0-9_-]+)+$') | length == 0
+      - __unattended_upgrades_values | select('search', '["\n]') | length == 0
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. unattended_upgrades_mail_report must be
+      always, only-on-error or on-change, and unattended_upgrades_automatic_reboot_time
+      now or a time such as 02:00. The keys of unattended_upgrades_settings must be apt
+      setting names such as Unattended-Upgrade::Automatic-Reboot-WithUsers, and no value
+      may contain a double quote or a line break.
+    quiet: true
+
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: unattended_upgrades_enabled | bool
+
+# The distribution's settings are in 50unattended-upgrades. This file comes after
+# them and overrides them.
+- name: Write the unattended-upgrades settings
+  ansible.builtin.template:
+    src: unattended-upgrades-local.j2
+    dest: "{{ __unattended_upgrades_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: apt-config -c %s dump
+
+- name: Turn the daily package list updates and upgrades on or off
+  ansible.builtin.template:
+    src: auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    validate: apt-config -c %s dump
+
+# apt-daily.timer updates the package lists, and apt-daily-upgrade.timer upgrades.
+- name: Enable and start the apt timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  when: unattended_upgrades_enabled | bool

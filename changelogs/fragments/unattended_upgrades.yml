@@ -1,0 +1,7 @@
+---
+minor_changes:
+  - unattended_upgrades - new role that installs upgrades automatically with
+    unattended-upgrades. It turns the daily package list updates and upgrades on
+    or off, and writes the report, reboot and cleanup settings, and any other apt
+    settings, to one file that overrides the distribution's, checked with
+    apt-config.
