@@ -86,7 +86,8 @@ package keeps in `/usr/share/chrony/chrony.conf`.
 - **Containers:** Ubuntu 26.04's chrony unit doesn't start in a container, which
   shares its host's clock, so there the role reports a change on every run.
 - **Replaced files:** `ansible.sources` and `ansible.conf`, both checked with
-  `chronyd -p` before they're written. A `chrony.conf` without the drop-in
+  `chronyd -p` before they're written. The check reads a temporary copy in
+  `/etc/chrony`, since Ubuntu's AppArmor profile lets chronyd read nothing else. A `chrony.conf` without the drop-in
   directories is replaced by the distribution's, and the distribution's sources
   are renamed or commented out, as described above.
 - **Rollback:** empty `chrony_servers`, `chrony_pools` and `chrony_settings`

@@ -26,3 +26,9 @@ __chrony_pending: "{{ ansible_check_mode and __chrony_install is changed }}"
 
 # Marks the source lines in chrony.conf that the role turned off.
 __chrony_marker: "#ansible-disabled# "
+
+# Checks a file with chronyd -p. Ubuntu's AppArmor profile for chronyd lets it read
+# only /etc/chrony, so the check runs on a copy there.
+__chrony_validate: >-
+  sh -c 'f=$(mktemp /etc/chrony/.ansible-validate.XXXXXX) || exit 1;
+  cp "$1" "$f" && chronyd -p -f "$f"; rc=$?; rm -f "$f"; exit $rc' sh %s
