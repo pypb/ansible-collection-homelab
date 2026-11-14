@@ -1,0 +1,84 @@
+---
+argument_specs:
+  main:
+    short_description: Swap in compressed RAM with zram, and encrypted swap on disk.
+    description:
+      - Sets up a zram swap device with systemd-zram-generator, or removes it.
+      - Optionally sets up swap in a file on disk, encrypted with a new random key at every boot, through crypttab and fstab.
+      - Turns off and deletes other swap files, and writes sysctl settings for swap.
+    author:
+      - pypb
+    options:
+      swap_zram_enabled:
+        type: bool
+        default: true
+        description:
+          - Set up C(/dev/zram0) as swap.
+          - False turns it off, and purges systemd-zram-generator, since its own settings would set up a device.
+      swap_zram_size:
+        type: str
+        default: min(ram / 2, 4096)
+        description: The device's size in MiB, as an expression of C(ram), the RAM in MiB.
+      swap_zram_compression_algorithm:
+        type: str
+        default: zstd
+        description: The compression algorithm.
+      swap_zram_priority:
+        type: int
+        default: 100
+        description: The swap priority. Higher is used first.
+      swap_zram_settings:
+        type: dict
+        default: {}
+        description: Other C(zram-generator.conf) settings for the device. These override the variables above.
+      swap_zram_sysctl:
+        type: dict
+        default:
+          vm.swappiness: 180
+          vm.page-cluster: 0
+          vm.watermark_boost_factor: 0
+          vm.watermark_scale_factor: 125
+        description: sysctl settings for swap in RAM, written while zram is on. C(swap_sysctl) overrides them.
+      swap_encrypted_enabled:
+        type: bool
+        default: false
+        description:
+          - Set up swap in a file on disk, encrypted with a new random key at every boot.
+          - False turns it off, and removes the file and its crypttab and fstab lines.
+      swap_encrypted_name:
+        type: str
+        default: cryptswap
+        description: The device name in C(/dev/mapper). Letters, digits and C(_) only.
+      swap_encrypted_file:
+        type: path
+        default: /var/swap.crypt
+        description: The file the swap is in.
+      swap_encrypted_size_mb:
+        type: int
+        default: 512
+        description: The file's size in MiB. A new size is applied when the device isn't open, such as after a reboot.
+      swap_encrypted_cipher:
+        type: str
+        default: aes-xts-plain64
+        description: The dm-crypt cipher.
+      swap_encrypted_key_size:
+        type: int
+        default: 512
+        description: The key size in bits. C(aes-xts-plain64) splits it in two, so 512 is AES-256.
+      swap_encrypted_priority:
+        type: int
+        default: 10
+        description: The swap priority. Lower than zram's, so that it's used once zram is full.
+      swap_removed_files:
+        type: list
+        elements: path
+        default: []
+        description: Swap files to turn off, remove from fstab and delete, such as Ubuntu's C(/swap.img).
+      swap_sysctl:
+        type: dict
+        default: {}
+        description: Other sysctl settings. With C(swap_zram_sysctl), they're written to C(/etc/sysctl.d/), and the file is removed when there are none.
+      swap_sysctl_file:
+        type: str
+        default: 90-swap.conf
+        description: The name of the sysctl file.

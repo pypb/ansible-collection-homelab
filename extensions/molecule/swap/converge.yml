@@ -1,0 +1,19 @@
+---
+- name: Converge swap with zram and encrypted swap
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up swap
+      ansible.builtin.include_role:
+        name: pypb.homelab.swap
+      vars:
+        swap_zram_size: min(ram / 4, 2048)
+        swap_zram_settings:
+          options: discard
+        swap_encrypted_enabled: true
+        swap_encrypted_size_mb: 16
+        swap_removed_files:
+          - /molecule.swap
+        swap_sysctl:
+          vm.swappiness: 100
+          vm.vfs_cache_pressure: 50

@@ -1,0 +1,103 @@
+---
+- name: Verify swap
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the swap files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/fstab
+        - /etc/crypttab
+        - /etc/systemd/zram-generator.conf
+        - /etc/sysctl.d/90-swap.conf
+      register: __molecule_files
+
+    - name: Look at the encrypted swap file
+      ansible.builtin.stat:
+        path: /var/swap.crypt
+      register: __molecule_crypt_file
+
+    - name: Look for the removed swap file
+      ansible.builtin.stat:
+        path: /molecule.swap
+      register: __molecule_removed
+
+    - name: Check the swap files
+      ansible.builtin.assert:
+        that:
+          - __fstab == ['/dev/mapper/cryptswap none swap defaults,pri=10 0 0']
+          - "'cryptswap /var/swap.crypt /dev/urandom swap,plain,cipher=aes-xts-plain64,size=512' in __crypttab"
+          - __zram[1:] == ['[zram0]', 'compression-algorithm = zstd', 'options = discard', 'swap-priority = 100', 'zram-size = min(ram / 4, 2048)']
+          - __sysctl[1:] == __molecule_sysctl
+          - __molecule_crypt_file['stat']['size'] == 16 * 1024 * 1024
+          - __molecule_crypt_file['stat']['mode'] == '0600'
+          - not __molecule_removed['stat']['exists']
+        fail_msg: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+      vars:
+        __raw: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+        __text: "{{ __raw | map('split', '\n') | map('reject', 'equalto', '') | map('list') | list }}"
+        __fstab: "{{ __text[0] | reject('match', '^#') | list }}"
+        __crypttab: "{{ __text[1] }}"
+        __zram: "{{ __text[2] }}"
+        __sysctl: "{{ __text[3] }}"
+        __molecule_sysctl:
+          - vm.page-cluster = 0
+          - vm.swappiness = 100
+          - vm.vfs_cache_pressure = 50
+          - vm.watermark_boost_factor = 0
+          - vm.watermark_scale_factor = 125
+
+    # The generator runs at boot and on daemon-reload. Running it by hand shows the
+    # unit it makes, which a container can't start. The fstab generator skips swap in
+    # containers.
+    - name: Run the crypttab generator
+      ansible.builtin.shell:
+        cmd: |
+          set -e
+          dir=$(mktemp -d)
+          /usr/lib/systemd/system-generators/systemd-cryptsetup-generator "$dir" "$dir" "$dir"
+          cat "$dir/systemd-cryptsetup@cryptswap.service"
+          rm -r "$dir"
+      register: __molecule_cryptsetup
+      changed_when: false
+
+    - name: Check the generated unit
+      ansible.builtin.assert:
+        that:
+          - "'RequiresMountsFor=/var/swap.crypt' in __molecule_cryptsetup['stdout']"
+          - "'systemd-makefs swap' in __molecule_cryptsetup['stdout']"
+
+    - name: Turn swap off
+      ansible.builtin.include_role:
+        name: pypb.homelab.swap
+      vars:
+        swap_zram_enabled: false
+        swap_encrypted_enabled: false
+
+    - name: Read fstab and crypttab afterwards
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/fstab
+        - /etc/crypttab
+      register: __molecule_after
+
+    - name: Look for the swap files afterwards
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/swap.crypt
+        - /etc/systemd/zram-generator.conf
+        - /etc/sysctl.d/90-swap.conf
+        - /usr/lib/systemd/system-generators/zram-generator
+      register: __molecule_after_files
+
+    - name: Check that swap is gone
+      ansible.builtin.assert:
+        that:
+          - __molecule_after_files['results'] | selectattr('stat.exists') | list | length == 0
+          - __text | select('search', 'cryptswap') | length == 0
+        fail_msg: "{{ __text }}"
+      vars:
+        __text: "{{ __molecule_after['results'] | map(attribute='content') | map('b64decode') | list }}"

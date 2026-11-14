@@ -1,0 +1,21 @@
+---
+# fstab lines from an older zram setup, and a swap file like Ubuntu's /swap.img.
+- name: Prepare old swap
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Create a swap file
+      ansible.builtin.copy:
+        content: ""
+        dest: /molecule.swap
+        mode: "0600"
+
+    - name: Add the old swap to fstab
+      ansible.builtin.copy:
+        content: |
+          # <file system> <mount point> <type> <options> <dump> <pass>
+          /dev/zram0 none swap nofail 0 0
+          /dev/zram1 none swap nofail 0 0
+          /molecule.swap none swap sw 0 0
+        dest: /etc/fstab
+        mode: "0644"
