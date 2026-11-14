@@ -1,0 +1,28 @@
+---
+__chrony_conf: /etc/chrony/chrony.conf
+__chrony_sources_dir: /etc/chrony/sources.d
+__chrony_sources_file: "{{ __chrony_sources_dir }}/ansible.sources"
+__chrony_conf_file: /etc/chrony/conf.d/ansible.conf
+
+# The servers and pools as dicts of type, host and a list of options.
+__chrony_sources: >-
+  {%- set __out = [] -%}
+  {%- for __type, __entries in [['server', chrony_servers], ['pool', chrony_pools]] -%}
+  {%- for __entry in __entries -%}
+  {%- set __dict = __entry if __entry is mapping else {'host': __entry} -%}
+  {%- set __options = __dict['options'] | default(chrony_source_options) -%}
+  {%- set _ = __out.append({'type': __type, 'host': __dict['host'] | default('') | string,
+                            'options': [__options] if __options is string else __options}) -%}
+  {%- endfor -%}
+  {%- endfor -%}
+  {{ __out }}
+
+# Every value in chrony_settings, as strings.
+__chrony_setting_values: >-
+  {{ chrony_settings.values() | list | flatten | map('string') | list }}
+
+# In check mode, chrony isn't installed yet on a new host, so its files aren't there.
+__chrony_pending: "{{ ansible_check_mode and __chrony_install is changed }}"
+
+# Marks the source lines in chrony.conf that the role turned off.
+__chrony_marker: "#ansible-disabled# "

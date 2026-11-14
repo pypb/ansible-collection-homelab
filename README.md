@@ -33,6 +33,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.iscsi_initiator`](roles/iscsi_initiator/README.md) | Sets up open-iscsi and logs in to targets now and at boot, with a disk timeout for chosen vendors and optional multipathd | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.server_baseline`](roles/server_baseline/README.md) | Basic server configuration: packages, the Ubuntu mirror, the host's domain, a static resolv.conf, sysctl, time zone, sudo, motd and banners, and the kernel consoles and GRUB menu | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.unattended_upgrades`](roles/unattended_upgrades/README.md) | Installs upgrades automatically with unattended-upgrades, with reports, automatic reboots and any other apt settings | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.chrony`](roles/chrony/README.md) | Keeps the clock in sync with chrony, with sources and settings in its drop-in directories, replacing the distribution's sources | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
@@ -97,6 +98,7 @@ molecule test --scenario-name ocfs2
 molecule test --scenario-name iscsi_initiator
 molecule test --scenario-name server_baseline
 molecule test --scenario-name unattended_upgrades
+molecule test --scenario-name chrony
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and

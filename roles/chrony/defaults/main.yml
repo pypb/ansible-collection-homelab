@@ -1,0 +1,22 @@
+---
+# NTP servers and pools, each a host name or address, or a dict with host and options.
+# When either list has entries, they replace the distribution's sources.
+chrony_servers: []
+chrony_pools: []
+
+# Options for the entries that don't set their own.
+chrony_source_options:
+  - iburst
+
+# Other chrony.conf directives. A list repeats the directive, and true writes it alone.
+chrony_settings: {}
+
+# The options chronyd starts with, in /etc/default/chrony. Unmanaged when empty.
+chrony_daemon_opts: ""
+
+# The other time daemons, which chrony replaces.
+chrony_purged_packages:
+  - ntp
+  - ntpsec
+  - openntpd
+  - systemd-timesyncd

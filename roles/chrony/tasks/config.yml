@@ -1,0 +1,103 @@
+---
+- name: Read chrony.conf
+  ansible.builtin.slurp:
+    src: "{{ __chrony_conf }}"
+  register: __chrony_conf_content
+
+# A chrony.conf that replaced the distribution's may not read the drop-in directories.
+# The package keeps its own copy, which ucf installs.
+- name: Restore the distribution's chrony.conf
+  ansible.builtin.copy:
+    src: /usr/share/chrony/chrony.conf
+    dest: "{{ __chrony_conf }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+  when: >-
+    __text is not search('(?m)^sourcedir ' ~ (__chrony_sources_dir | regex_escape) ~ '\s*$')
+    or __text is not search('(?m)^confdir /etc/chrony/conf\.d\s*$')
+  vars:
+    __text: "{{ __chrony_conf_content['content'] | b64decode }}"
+
+# The marker lets the role turn back on only the lines it turned off.
+- name: Turn the sources in chrony.conf off
+  ansible.builtin.replace:
+    path: "{{ __chrony_conf }}"
+    regexp: '^((?:pool|server|peer)\s)'
+    replace: '{{ __chrony_marker }}\1'
+  notify: Restart chrony
+  when: __chrony_sources | length > 0
+
+- name: Turn the sources in chrony.conf back on
+  ansible.builtin.replace:
+    path: "{{ __chrony_conf }}"
+    regexp: '^{{ __chrony_marker | regex_escape }}'
+    replace: ""
+  notify: Restart chrony
+  when: __chrony_sources | length == 0
+
+- name: Find the other source files
+  ansible.builtin.find:
+    paths: "{{ __chrony_sources_dir }}"
+    patterns: "{{ '*.sources' if __chrony_sources | length > 0 else '*.sources.disabled' }}"
+    excludes: "{{ __chrony_sources_file | basename }}"
+  register: __chrony_other_sources
+
+# chronyd reads only the files that end in .sources. Neither dpkg nor ucf brings back
+# a renamed file when the package is upgraded.
+- name: Turn the other source files off or back on
+  ansible.builtin.command:
+    argv: [mv, --force, --, "{{ item }}", "{{ __new }}"]
+    removes: "{{ item }}"
+  vars:
+    __new: >-
+      {{ item ~ '.disabled' if __chrony_sources | length > 0
+         else item | regex_replace('\.disabled$', '') }}
+  loop: "{{ __chrony_other_sources['files'] | map(attribute='path') | sort }}"
+  notify: Restart chrony
+
+- name: Write the sources
+  ansible.builtin.template:
+    src: sources.j2
+    dest: "{{ __chrony_sources_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: chronyd -p -f %s
+  notify: Restart chrony
+  when: __chrony_sources | length > 0
+
+- name: Remove the sources
+  ansible.builtin.file:
+    path: "{{ __chrony_sources_file }}"
+    state: absent
+  notify: Restart chrony
+  when: __chrony_sources | length == 0
+
+- name: Write the other settings
+  ansible.builtin.template:
+    src: settings.j2
+    dest: "{{ __chrony_conf_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: chronyd -p -f %s
+  notify: Restart chrony
+  when: chrony_settings | length > 0
+
+- name: Remove the other settings
+  ansible.builtin.file:
+    path: "{{ __chrony_conf_file }}"
+    state: absent
+  notify: Restart chrony
+  when: chrony_settings | length == 0
+
+- name: Set the options chronyd starts with
+  ansible.builtin.lineinfile:
+    path: /etc/default/chrony
+    regexp: '^DAEMON_OPTS='
+    line: 'DAEMON_OPTS="{{ chrony_daemon_opts }}"'
+  notify: Restart chrony
+  when: chrony_daemon_opts | length > 0

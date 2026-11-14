@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: chrony
+  namespace: pypb
+  author: pypb
+  description: Keep the clock in sync with chrony, using its drop-in directories.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - chrony
+    - ntp
+    - time
+    - debian
+    - ubuntu
+dependencies: []
