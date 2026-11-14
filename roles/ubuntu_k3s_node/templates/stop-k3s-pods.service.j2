@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# k3s leaves its containers running when it stops. This unit stops them at shutdown,
+# so that the file systems they use unmount cleanly. Units stop in the reverse of
+# their start order: this one after k3s, and before the file systems and the network.
+[Unit]
+Description=Stop the k3s pods before file systems unmount at shutdown
+After=local-fs.target remote-fs.target network-online.target
+Wants=network-online.target
+Before={{ ubuntu_k3s_node_k3s_service }}
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+# The - ignores a missing script, as before k3s is installed.
+ExecStop=-{{ ubuntu_k3s_node_k3s_killall }}
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -11,6 +11,8 @@ that a node doesn't need, and sets up what k3s and its storage need around it:
 - Installs the NFS client, configures `/etc/nfsmount.conf`, and runs cachefilesd.
 - Writes a `resolv.conf` for k3s to give to pods.
 - Adds watchdogs that reboot the node when a mount, such as an iSCSI volume, is missing.
+- Stops the k3s pods at shutdown, so that shared file systems such as OCFS2
+  unmount cleanly.
 - On servers, writes the Pod Security Admission configuration and audit policy
   that k3s reads.
 
@@ -49,6 +51,9 @@ that doesn't have k3s yet, so k3s finds its configuration when it first starts.
 | `ubuntu_k3s_node_nfsmount_conf` | `true` | Write `/etc/nfsmount.conf` with NFS defaults for volumes |
 | `ubuntu_k3s_node_cachefilesd` | `true` | Install and run cachefilesd, a local cache for NFS mounts with the `fsc` option |
 | `ubuntu_k3s_node_mount_watchdog_paths` | `[]` | Mount points to check. See [Mount watchdogs](#mount-watchdogs) |
+| `ubuntu_k3s_node_stop_pods_at_shutdown` | `true` | Stop the k3s pods at shutdown. See [Stopping pods at shutdown](#stopping-pods-at-shutdown) |
+| `ubuntu_k3s_node_k3s_service` | `k3s.service` | The k3s unit, which the pods are stopped after |
+| `ubuntu_k3s_node_k3s_killall` | `/usr/local/bin/k3s-killall.sh` | The script that stops k3s and its pods |
 | `ubuntu_k3s_node_psa_defaults` | Enforce `privileged`, audit and warn `baseline` | Pod Security Admission defaults for namespaces without their own labels |
 | `ubuntu_k3s_node_psa_exempt_namespaces` | `[kube-system]` | Namespaces that Pod Security Admission doesn't check |
 
@@ -88,8 +93,13 @@ that already run k3s, it waits for the node to be Ready before moving on to the
 next one. Set `ubuntu_k3s_node_k3s_service` when the k3s unit isn't called
 `k3s.service`. With `ubuntu_k3s_node_iscsi` set, it first runs the
 [`iscsi_initiator`](../iscsi_initiator/README.md) role, and with
-`ubuntu_k3s_node_ocfs2` set, the [`ocfs2`](#ocfs2) role. With `ubuntu_k3s_node_reboot` set, it also reboots each
-node. It doesn't drain nodes.
+`ubuntu_k3s_node_ocfs2` set, the [`ocfs2`](#ocfs2) role.
+
+With `ubuntu_k3s_node_reboot` set, it also reboots each node. Before the reboot, it
+stops k3s and its pods with `ubuntu_k3s_node_k3s_killall` and, with
+`ubuntu_k3s_node_ocfs2` set, unmounts `ocfs2_mounts`, so that the node leaves the
+OCFS2 cluster cleanly. If a file system is still busy, the play fails and the node
+isn't rebooted. It doesn't drain nodes, so the pods stop without being moved.
 
 Try it on one node in check mode first, then for real:
 
@@ -178,12 +188,30 @@ doesn't remove its units.
 With `x-systemd.automount`, the automount point counts as mounted even when the
 volume behind it isn't.
 
+## Stopping pods at shutdown
+
+k3s leaves its containers running when it stops. At shutdown they keep the file
+systems they use busy, so those don't unmount until the containers are killed.
+For OCFS2 that's too late: by then the network is down, and the other nodes block
+until they declare the node dead. See the clean shutdown note in the
+[`ocfs2`](../ocfs2/README.md#things-to-know) role.
+
+With `ubuntu_k3s_node_stop_pods_at_shutdown`, the role installs and starts
+`stop-k3s-pods.service`. It does nothing at boot. At shutdown, it runs
+`k3s-killall.sh` after k3s stops and before the file systems unmount and the network
+goes down. Its name doesn't start with `k3s`, because `k3s-killall.sh` stops the
+units with those names. Stopping it by hand also stops the pods.
+
+Turning it off disables and deletes the unit without stopping it. The unit that's
+already loaded may still run once, at the next shutdown.
+
 ## Behaviour
 
 - **Idempotent:** yes.
 - **Atomic:** no.
 - **Check mode:** yes.
-- **Applied right away:** packages, units, sysctl settings and the cachefilesd service.
+- **Applied right away:** packages, units, sysctl settings, the cachefilesd service
+  and the unit that stops the pods at shutdown.
 - **Applied at reboot:** the module blacklist, for which the initramfs is updated,
   and the Cilium modules.
 - **Applied at the next k3s restart:** the PSA configuration and audit policy. The

@@ -91,6 +91,14 @@ playbook runs this role when `ubuntu_k3s_node_ocfs2` is true.
   at the next reboot, and the role prints a message when there are any. Reboot the
   nodes one at a time. To add a node, add it to the list, reboot the existing nodes,
   then start the new one. Never change the number of an existing node.
+- **Clean shutdown:** unmount the file systems before a node goes down. A node that
+  goes down with them mounted still holds cluster locks, and the other nodes block
+  on those locks until they declare it dead, after about `ocfs2_heartbeat_threshold`
+  × 2 seconds without its disk heartbeat. If it comes back sooner, its heartbeat
+  resumes and its mounts hang, and so does its boot when a service needs them. Keep
+  it off for longer than that. Processes that keep a file system busy at shutdown,
+  such as containers that outlive k3s, keep it from unmounting: the
+  `pypb.homelab.ubuntu_k3s_node` role stops k3s pods at shutdown.
 - **fsck:** the fstab entries have pass number 0, so they aren't checked at boot. A
   file system that other nodes have mounted can't be checked. Run `fsck.ocfs2` by
   hand, with the file system unmounted on every node.

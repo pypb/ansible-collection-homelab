@@ -121,11 +121,22 @@
       ansible.builtin.assert:
         that: not __molecule_shutdown['stat']['exists']
 
-    - name: Turn Cilium off again
+    - name: Read the state of the unit that stops the pods at shutdown
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=UnitFileState, --property=ActiveState, stop-k3s-pods.service]
+      register: __molecule_stop_pods
+      changed_when: false
+
+    - name: Check the unit that stops the pods at shutdown is enabled and started
+      ansible.builtin.assert:
+        that: __molecule_stop_pods['stdout_lines'] | sort == ['ActiveState=active', 'UnitFileState=enabled']
+
+    - name: Turn Cilium and stopping the pods off again
       ansible.builtin.include_role:
         name: pypb.homelab.ubuntu_k3s_node
       vars:
         ubuntu_k3s_node_cilium: false
+        ubuntu_k3s_node_stop_pods_at_shutdown: false
 
     - name: Look for the Cilium files
       ansible.builtin.stat:
@@ -133,11 +144,23 @@
       loop:
         - /etc/sysctl.d/99-zzz-override_cilium.conf
         - /etc/modules-load.d/cilium.conf
+        - /etc/systemd/system/stop-k3s-pods.service
       register: __molecule_cilium_files
 
-    - name: Check the Cilium files were removed
+    - name: Check the Cilium files and the unit were removed
       ansible.builtin.assert:
         that: __molecule_cilium_files['results'] | selectattr('stat.exists') | length == 0
+
+    - name: Read whether the unit that stops the pods at shutdown is enabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, stop-k3s-pods.service]
+      register: __molecule_stop_pods_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Check the unit that stops the pods at shutdown was disabled
+      ansible.builtin.assert:
+        that: __molecule_stop_pods_enabled['stdout'] != 'enabled'
 
 - name: Verify cloud-init is kept when it wrote the network configuration
   hosts: cloud_init

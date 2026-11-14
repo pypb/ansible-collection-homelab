@@ -26,11 +26,8 @@
     - name: Apply changes before checking the node
       ansible.builtin.meta: flush_handlers
 
-    - name: Reboot the node
-      ansible.builtin.reboot:
-      when: ubuntu_k3s_node_reboot | default(false) | bool
-
-    # The playbook can run before k3s is installed: then there is nothing to wait for.
+    # The playbook can run before k3s is installed: then there is nothing to stop or
+    # wait for.
     - name: Check whether k3s is installed
       ansible.builtin.command:
         argv:
@@ -42,7 +39,35 @@
       register: __ubuntu_k3s_node_k3s_unit
       changed_when: false
       check_mode: false
-      when: ubuntu_k3s_node_server | default(false) | bool
+      when: (ubuntu_k3s_node_server | default(false) | bool) or (ubuntu_k3s_node_reboot | default(false) | bool)
+
+    # A node that goes down with OCFS2 mounted holds cluster locks, and the other
+    # nodes block until they declare it dead. If it comes back before then, its
+    # mounts hang. k3s leaves its containers running when it stops, and they keep the
+    # file systems busy, so stop them and unmount first. A busy file system fails the
+    # play instead of rebooting.
+    - name: Leave the cluster cleanly before rebooting
+      when: ubuntu_k3s_node_reboot | default(false) | bool
+      block:
+        - name: Stop k3s and its pods
+          ansible.builtin.command:
+            argv:
+              - "{{ ubuntu_k3s_node_k3s_killall | default('/usr/local/bin/k3s-killall.sh') }}"
+          changed_when: true
+          when: __ubuntu_k3s_node_k3s_unit['stdout'] == 'loaded'
+
+        - name: Unmount the OCFS2 file systems
+          ansible.posix.mount:
+            path: "{{ item['path'] }}"
+            state: unmounted
+          loop: "{{ ocfs2_mounts | default([]) }}"
+          loop_control:
+            label: "{{ item['path'] }}"
+          when: ubuntu_k3s_node_ocfs2 | default(false) | bool
+
+    - name: Reboot the node
+      ansible.builtin.reboot:
+      when: ubuntu_k3s_node_reboot | default(false) | bool
 
     # Read-only, so it also runs in check mode. Agents have no kubeconfig.
     - name: Wait for the node to be Ready
