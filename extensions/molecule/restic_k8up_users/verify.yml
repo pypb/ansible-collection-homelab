@@ -1,0 +1,68 @@
+---
+- name: Verify
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Find the Secrets
+      ansible.builtin.find:
+        paths: "{{ __molecule_state }}/secrets"
+      register: __molecule_secrets
+
+    - name: Check only the Schedules on the rest-server got Secrets
+      ansible.builtin.assert:
+        that: >-
+          __molecule_secrets['files'] | map(attribute='path') | map('basename') | sort
+          == ['app1_restic-rest.json', 'app2_creds.json']
+
+    - name: Check the first Secret
+      ansible.builtin.include_tasks: tasks/check_secret.yml
+      vars:
+        secret_file: app1_restic-rest.json
+        secret_user: k8up-test-app1
+        secret_username_key: username
+        secret_password_key: password
+
+    - name: Check the Secret with dotted keys
+      ansible.builtin.include_tasks: tasks/check_secret.yml
+      vars:
+        secret_file: app2_creds.json
+        secret_user: k8up-test-app2
+        secret_username_key: user.name
+        secret_password_key: user.password
+
+    - name: Read the first Secret before a repository moves
+      ansible.builtin.slurp:
+        src: "{{ __molecule_state }}/secrets/app1_restic-rest.json"
+      register: __molecule_app1_before
+
+    # As if the Schedule's repository URL had changed, leaving the old user in
+    # the Secret.
+    - name: Put another user in the second Secret
+      ansible.builtin.copy:
+        content: >-
+          {{ {'apiVersion': 'v1', 'kind': 'Secret', 'type': 'Opaque',
+              'metadata': {'name': 'creds', 'namespace': 'app2'},
+              'data': {'user.name': 'old-user' | b64encode, 'user.password': 'old' | b64encode}} | to_json }}
+        dest: "{{ __molecule_state }}/secrets/app2_creds.json"
+        mode: "0600"
+
+    - name: Manage the rest-server users again
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_k8up_users
+
+    - name: Check the second Secret was rewritten
+      ansible.builtin.include_tasks: tasks/check_secret.yml
+      vars:
+        secret_file: app2_creds.json
+        secret_user: k8up-test-app2
+        secret_username_key: user.name
+        secret_password_key: user.password
+
+    - name: Read the first Secret after
+      ansible.builtin.slurp:
+        src: "{{ __molecule_state }}/secrets/app1_restic-rest.json"
+      register: __molecule_app1_after
+
+    - name: Check the first Secret was left alone
+      ansible.builtin.assert:
+        that: __molecule_app1_after['content'] == __molecule_app1_before['content']

@@ -1,5 +1,6 @@
 ---
-# Content from outside this collection that pypb.homelab.site uses:
+# Content from outside this collection that pypb.homelab.site and
+# pypb.homelab.k3s_cluster use:
 #   ansible-galaxy install -r requirements.yml
 # The roles are included when they run, so a role only has to be installed when
 # a host enables it. community.zabbix is always needed, since the playbook calls
@@ -9,6 +10,8 @@ roles:
   - name: willshersystems.sshd
   # site_docker
   - name: geerlingguy.docker
+  # k3s_cluster's k3s step
+  - name: xanmanning.k3s
 
 collections:
   # site_zabbix_agent and site_zabbix_host

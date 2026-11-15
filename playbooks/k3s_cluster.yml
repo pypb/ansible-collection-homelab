@@ -1,0 +1,47 @@
+---
+# Sets up one k3s cluster: the nodes, then k3s, then the rest-server logins of
+# its k8up backups. It targets the hosts in k3s_cluster_hosts, which defaults to
+# the k3s_cluster group. Each step has a tag: ubuntu_k3s_node, k3s and
+# restic_k8up_users.
+#
+# k3s is installed with the xanmanning.k3s role, which is included when it runs,
+# so it only has to be installed when that step runs. See requirements.yml.
+
+# One node at a time, stopping at the first failure.
+- name: Prepare the nodes
+  ansible.builtin.import_playbook: pypb.homelab.ubuntu_k3s_node
+  vars:
+    ubuntu_k3s_node_hosts: "{{ k3s_cluster_hosts | default('k3s_cluster') }}"
+  tags:
+    - ubuntu_k3s_node
+
+# All nodes together, since the role builds the cluster from the play's hosts.
+- name: Install k3s
+  hosts: "{{ k3s_cluster_hosts | default('k3s_cluster') }}"
+  become: true
+  tags:
+    - k3s
+  tasks:
+    - name: Install k3s
+      ansible.builtin.include_role:
+        name: xanmanning.k3s
+        apply:
+          tags:
+            - k3s
+
+# On the first node, which has kubectl. Only where restic_k8up_users_enable is
+# true there, since the cluster needs k8up's Schedule resource.
+- name: Give the k8up Schedules rest-server logins
+  hosts: "{{ k3s_cluster_hosts | default('k3s_cluster') }}[0]"
+  become: true
+  gather_facts: false
+  tags:
+    - restic_k8up_users
+  tasks:
+    - name: Manage the rest-server users of k8up
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_k8up_users
+        apply:
+          tags:
+            - restic_k8up_users
+      when: restic_k8up_users_enable | default(false) | bool

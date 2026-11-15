@@ -1,0 +1,9 @@
+---
+minor_changes:
+  - restic_k8up_users - new role that gives the k8up backup Schedules of a cluster
+    their own rest-server logins. A Schedule whose credential Secret is missing,
+    or holds another username, gets a new password through restic_server_users
+    and its Secret is written. Users with a prefix and no Schedule are reported.
+  - k3s_cluster - new playbook that sets up one k3s cluster - the ubuntu_k3s_node
+    playbook, k3s with the xanmanning.k3s role, and restic_k8up_users on the first
+    node - with a tag per step.

@@ -1,0 +1,3 @@
+---
+# Marks the Secrets this role writes.
+__restic_k8up_users_label: ansible-restic_k8up_users

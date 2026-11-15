@@ -1,0 +1,15 @@
+---
+# The command that runs kubectl against the cluster, as a list.
+restic_k8up_users_kubectl:
+  - k3s
+  - kubectl
+
+# The rest-server's host name. Only Schedules whose rest backend is on it get
+# users. Defaults to the host of restic_backup_repo_url.
+restic_k8up_users_server_host: >-
+  {{ (restic_backup_repo_url | default('') | regex_replace('^rest:', '')
+      | urlsplit('hostname')) | default('', true) }}
+
+# Users on the rest-server that start with this prefix and have no Schedule
+# are reported, not removed. Empty reports nothing.
+restic_k8up_users_report_prefix: ""
