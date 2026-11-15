@@ -1,0 +1,35 @@
+---
+# The wait entry point. Agents have no kubeconfig, and before k3s is installed there
+# is no node to wait for.
+- name: Check whether k3s is installed
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - --property=LoadState
+      - --value
+      - "{{ ubuntu_k3s_node_k3s_service }}"
+  register: __ubuntu_k3s_node_k3s_unit
+  changed_when: false
+  check_mode: false
+  when: ubuntu_k3s_node_server | bool
+
+# Read-only, so it also runs in check mode.
+- name: Wait for the node to be Ready
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - kubectl
+      - wait
+      - --for=condition=Ready
+      - "node/{{ ubuntu_k3s_node_name }}"
+      - --timeout=30s
+  register: __ubuntu_k3s_node_ready
+  until: __ubuntu_k3s_node_ready is succeeded
+  retries: 20
+  delay: 15
+  changed_when: false
+  check_mode: false
+  when:
+    - ubuntu_k3s_node_server | bool
+    - __ubuntu_k3s_node_k3s_unit['stdout'] == 'loaded'

@@ -27,64 +27,20 @@
       ansible.builtin.meta: flush_handlers
 
     # The playbook can run before k3s is installed: then there is nothing to stop or
-    # wait for.
-    - name: Check whether k3s is installed
-      ansible.builtin.command:
-        argv:
-          - systemctl
-          - show
-          - --property=LoadState
-          - --value
-          - "{{ ubuntu_k3s_node_k3s_service | default('k3s.service') }}"
-      register: __ubuntu_k3s_node_k3s_unit
-      changed_when: false
-      check_mode: false
-      when: (ubuntu_k3s_node_server | default(false) | bool) or (ubuntu_k3s_node_reboot | default(false) | bool)
-
-    # A node that goes down with OCFS2 mounted holds cluster locks, and the other
-    # nodes block until they declare it dead. If it comes back before then, its
-    # mounts hang. k3s leaves its containers running when it stops, and they keep the
-    # file systems busy, so stop them and unmount first. A busy file system fails the
-    # play instead of rebooting.
-    - name: Leave the cluster cleanly before rebooting
-      when: ubuntu_k3s_node_reboot | default(false) | bool
-      block:
-        - name: Stop k3s and its pods
-          ansible.builtin.command:
-            argv:
-              - "{{ ubuntu_k3s_node_k3s_killall | default('/usr/local/bin/k3s-killall.sh') }}"
-          changed_when: true
-          when: __ubuntu_k3s_node_k3s_unit['stdout'] == 'loaded'
-
-        - name: Unmount the OCFS2 file systems
-          ansible.posix.mount:
-            path: "{{ item['path'] }}"
-            state: unmounted
-          loop: "{{ ocfs2_mounts | default([]) }}"
-          loop_control:
-            label: "{{ item['path'] }}"
-          when: ubuntu_k3s_node_ocfs2 | default(false) | bool
-
+    # wait for. Before rebooting, the node leaves the cluster cleanly: see the role's
+    # reboot entry point.
     - name: Reboot the node
-      ansible.builtin.reboot:
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+        tasks_from: reboot.yml
+      vars:
+        ubuntu_k3s_node_reboot_unmount_paths: >-
+          {{ (ocfs2_mounts | default([]) | map(attribute='path') | list)
+             if (ubuntu_k3s_node_ocfs2 | default(false) | bool) else [] }}
       when: ubuntu_k3s_node_reboot | default(false) | bool
 
-    # Read-only, so it also runs in check mode. Agents have no kubeconfig.
     - name: Wait for the node to be Ready
-      ansible.builtin.command:
-        argv:
-          - k3s
-          - kubectl
-          - wait
-          - --for=condition=Ready
-          - "node/{{ ubuntu_k3s_node_name | default(ansible_facts['nodename']) }}"
-          - --timeout=30s
-      register: __ubuntu_k3s_node_ready
-      until: __ubuntu_k3s_node_ready is succeeded
-      retries: 20
-      delay: 15
-      changed_when: false
-      check_mode: false
-      when:
-        - ubuntu_k3s_node_server | default(false) | bool
-        - __ubuntu_k3s_node_k3s_unit['stdout'] == 'loaded'
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+        tasks_from: wait.yml
+      when: not (ubuntu_k3s_node_reboot | default(false) | bool)

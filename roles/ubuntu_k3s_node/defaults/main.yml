@@ -103,6 +103,13 @@ ubuntu_k3s_node_stop_pods_at_shutdown: true
 ubuntu_k3s_node_k3s_service: k3s.service
 ubuntu_k3s_node_k3s_killall: /usr/local/bin/k3s-killall.sh
 
+# For the reboot and wait entry points. The node name k3s registers, the file
+# systems to unmount before rebooting, and the reboot's message and delay.
+ubuntu_k3s_node_name: "{{ ansible_facts['nodename'] }}"
+ubuntu_k3s_node_reboot_unmount_paths: []
+ubuntu_k3s_node_reboot_msg: Reboot initiated by Ansible
+ubuntu_k3s_node_post_reboot_delay: 0
+
 # Pod Security Admission defaults for namespaces without their own labels.
 ubuntu_k3s_node_psa_defaults:
   enforce: privileged

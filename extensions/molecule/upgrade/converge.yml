@@ -1,0 +1,8 @@
+---
+# Containers can't reboot. The check run goes through the reboot entry point,
+# where the reboot module does nothing in check mode, and the real run skips it.
+- name: Converge
+  ansible.builtin.import_playbook: pypb.homelab.upgrade
+  vars:
+    upgrade_hosts: targets
+    upgrade_reboot: "{{ ansible_check_mode }}"
