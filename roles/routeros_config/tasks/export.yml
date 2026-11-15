@@ -1,0 +1,29 @@
+---
+# /export only exists in the CLI. It reads, so it also runs in check mode.
+- name: Read the configuration
+  community.routeros.command:
+    commands:
+      - /export {{ routeros_config_export_options }}
+  vars:
+    ansible_connection: ansible.netcommon.network_cli
+    ansible_network_os: community.routeros.routeros
+  check_mode: false
+  changed_when: false
+  register: __routeros_config_export
+
+- name: Create the export directory on the controller
+  ansible.builtin.file:
+    path: "{{ routeros_config_export_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  check_mode: false
+
+- name: Save the configuration on the controller
+  ansible.builtin.copy:
+    # The first line has the time of the export, which would change every run.
+    content: "{{ __routeros_config_export.stdout[0] | regex_replace('(?m)^# .* by (RouterOS .*)$', '# by \\1') }}\n"
+    dest: "{{ routeros_config_export_dir }}/{{ inventory_hostname }}.rsc"
+    mode: "0600"
+  delegate_to: localhost
+  check_mode: false

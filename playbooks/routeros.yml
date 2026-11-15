@@ -1,0 +1,11 @@
+---
+# Configures RouterOS devices through their API, one at a time, so that a mistake
+# stops the run before it reaches the next device.
+#   ansible-playbook pypb.homelab.routeros --check --diff
+- name: Configure RouterOS devices
+  hosts: "{{ routeros_hosts | default('routeros') }}"
+  gather_facts: false
+  connection: local
+  serial: 1
+  roles:
+    - role: pypb.homelab.routeros_config

@@ -1,0 +1,14 @@
+---
+minor_changes:
+  - routeros_config - new role that configures MikroTik RouterOS devices through the
+    API, in numbered steps merged from every routeros_config_steps_* variable, so
+    that any number of group and host files can add to the same step without
+    replacing each other. The steps are checked before anything is applied, and
+    operations on the same path in a step are joined into one api_modify call.
+    Switch ports are described once, with their comment, PoE, bridge, PVID and
+    tagged VLANs. It also manages SSH keys by fingerprint, saves /export on the
+    controller before a change and an encrypted backup on the device after one.
+  - routeros - new playbook that runs the routeros_config role on the routeros
+    group, one device at a time.
+  - routeros_config_plan, routeros_config_ports and routeros_ssh_fingerprint - new
+    filters used by the routeros_config role.

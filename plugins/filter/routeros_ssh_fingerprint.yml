@@ -1,0 +1,24 @@
+---
+DOCUMENTATION:
+  name: routeros_ssh_fingerprint
+  short_description: The SHA256 fingerprint of an SSH public key, as RouterOS shows it
+  version_added: 0.3.0
+  author: pypb
+  description:
+    - Returns C(SHA256:) and the base64 of the key's SHA256 hash, with the padding
+      that RouterOS keeps and OpenSSH leaves out.
+  options:
+    _input:
+      description: A public key line, such as C(ssh-ed25519 AAAA... comment), or only its base64 part.
+      type: str
+      required: true
+
+EXAMPLES: |
+  - name: Show a key's fingerprint
+    ansible.builtin.debug:
+      msg: "{{ lookup('ansible.builtin.file', '~/.ssh/id_ed25519.pub') | pypb.homelab.routeros_ssh_fingerprint }}"
+
+RETURN:
+  _value:
+    description: The fingerprint, such as C(SHA256:RRt/48RS/Nvf4SfDf0JnY1/9V89jHJjZ4IATBWjOMrs=).
+    type: str

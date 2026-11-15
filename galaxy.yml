@@ -13,11 +13,13 @@ tags:
   - homelab
   - infrastructure
   - linux
+  - routeros
 dependencies:
   ansible.posix: ">=2.0.0"
   community.crypto: ">=3.1.1"
   community.docker: ">=5.0.0"
   community.general: ">=9.0.0"
+  community.routeros: ">=3.0.0"
 repository: https://github.com/pypb/ansible-collection-homelab
 documentation: https://github.com/pypb/ansible-collection-homelab/blob/main/README.md
 homepage: https://github.com/pypb/ansible-collection-homelab

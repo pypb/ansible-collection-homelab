@@ -1,0 +1,38 @@
+---
+- name: Read the SSH keys
+  community.routeros.api_info:
+    path: user ssh-keys
+    unfiltered: true
+  register: __routeros_config_ssh_keys
+
+- name: Add SSH keys
+  community.routeros.api:
+    path: user ssh-keys
+    add: >-
+      user={{ item.user }} key="{{ item.key }}"{{ (' comment="' ~ item.comment ~ '"') if item.comment is defined else '' }}
+  loop: "{{ routeros_config_ssh_keys }}"
+  loop_control:
+    label: "{{ item.user }}: {{ item.comment | default(item.key | pypb.homelab.routeros_ssh_fingerprint) }}"
+  when: item.user ~ ' ' ~ (item.key | pypb.homelab.routeros_ssh_fingerprint) not in __routeros_config_ssh_present
+  vars:
+    __routeros_config_ssh_present: >-
+      {{ __routeros_config_ssh_keys.result | map(attribute='user')
+         | zip(__routeros_config_ssh_keys.result | map(attribute='fingerprint')) | map('join', ' ') | list }}
+  notify: Save a device backup
+
+- name: Remove other SSH keys
+  community.routeros.api:
+    path: user ssh-keys
+    remove: "{{ item['.id'] }}"
+  loop: "{{ __routeros_config_ssh_keys.result }}"
+  loop_control:
+    label: "{{ item.user }}: {{ item.fingerprint }}"
+  when:
+    - routeros_config_ssh_keys_exclusive
+    - item.user ~ ' ' ~ item.fingerprint not in __routeros_config_ssh_wanted
+  vars:
+    __routeros_config_ssh_wanted: >-
+      {{ routeros_config_ssh_keys | map(attribute='user')
+         | zip(routeros_config_ssh_keys | map(attribute='key') | map('pypb.homelab.routeros_ssh_fingerprint'))
+         | map('join', ' ') | list }}
+  notify: Save a device backup

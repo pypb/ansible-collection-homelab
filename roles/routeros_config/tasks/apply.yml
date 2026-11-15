@@ -1,0 +1,9 @@
+---
+# Each item of the plan is included on its own, from the file for its module, so
+# that the steps keep their order whichever module they use.
+- name: Apply the configuration steps
+  ansible.builtin.include_tasks: "apply_{{ __routeros_config_item.module | split('.') | last }}.yml"
+  loop: "{{ routeros_config_plan }}"
+  loop_control:
+    loop_var: __routeros_config_item
+    label: "{{ __routeros_config_item.step }}: {{ __routeros_config_item.path or __routeros_config_item.args.commands | join('; ') }}"

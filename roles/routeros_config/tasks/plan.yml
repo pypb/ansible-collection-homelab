@@ -1,0 +1,10 @@
+---
+- name: Work out the configuration plan
+  ansible.builtin.set_fact:
+    routeros_config_plan: >-
+      {{ lookup('community.general.merge_variables', __routeros_config_steps_pattern, initial_value={})
+         | combine(routeros_config_ports
+                   | pypb.homelab.routeros_config_ports(routeros_config_bridges, routeros_config_port_steps,
+                                                        routeros_config_ethernet_pattern),
+                   list_merge='append')
+         | pypb.homelab.routeros_config_plan(routeros_config_handle_absent_entries_default) }}

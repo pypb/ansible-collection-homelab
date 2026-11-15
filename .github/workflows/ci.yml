@@ -39,6 +39,19 @@ jobs:
       - run: ansible-test sanity --venv --python 3.14 --requirements
         working-directory: ansible_collections/pypb/homelab
 
+  units:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: ansible_collections/pypb/homelab
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install ansible-core
+      - run: ansible-test units --venv --python 3.14 --requirements
+        working-directory: ansible_collections/pypb/homelab
+
   molecule:
     runs-on: ubuntu-latest
     strategy:
@@ -64,6 +77,7 @@ jobs:
           - wireguard
           - haproxy
           - docker_traefik
+          - routeros_config
           - site
           - upgrade
     env:
@@ -76,7 +90,7 @@ jobs:
         with:
           python-version: "3.14"
       - run: pip install ansible-core molecule requests
-      - run: ansible-galaxy collection install ansible.posix community.docker community.crypto community.general community.zabbix
+      - run: ansible-galaxy collection install ansible.posix community.docker community.crypto community.general community.routeros community.zabbix
       - run: molecule test --scenario-name ${{ matrix.scenario }}
         working-directory: ansible_collections/pypb/homelab/extensions
 

@@ -1,0 +1,45 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - routeros_config_api_password | length > 0
+      - routeros_config_ssh_keys | rejectattr('user', 'defined') | length == 0
+      - routeros_config_ssh_keys | rejectattr('key', 'defined') | length == 0
+      - routeros_config_ssh_keys | map(attribute='key') | select('search', '["\\\\\n]') | length == 0
+      - routeros_config_ssh_keys | selectattr('comment', 'defined') | map(attribute='comment') | select('search', '["\\\\\n]') | length == 0
+      - not routeros_config_device_backup or routeros_config_device_backup_password | length > 0
+      - routeros_config_device_backup_password is not search('["\\\\\n]')
+      - routeros_config_device_backup_name is match('^[A-Za-z0-9._-]+$')
+    fail_msg: >-
+      routeros_config_api_password is required. Each SSH key needs a user and a key, and
+      neither the keys, their comments nor the backup password may contain a double quote,
+      a backslash or a line break. A device backup needs a password, and its name may only
+      have letters, digits and ._-.
+    quiet: true
+
+- name: Work out the configuration plan
+  ansible.builtin.include_tasks: plan.yml
+
+- name: Configure the device
+  module_defaults:
+    group/community.routeros.api:
+      hostname: "{{ routeros_config_api_hostname }}"
+      username: "{{ routeros_config_api_username }}"
+      password: "{{ routeros_config_api_password }}"
+      port: "{{ routeros_config_api_port if routeros_config_api_port | int > 0 else omit }}"
+      tls: "{{ routeros_config_api_tls }}"
+      validate_certs: "{{ routeros_config_api_validate_certs }}"
+      validate_cert_hostname: "{{ routeros_config_api_validate_cert_hostname }}"
+      ca_path: "{{ routeros_config_api_ca_path if routeros_config_api_ca_path | length > 0 else omit }}"
+      timeout: "{{ routeros_config_api_timeout }}"
+  block:
+    - name: Export the configuration
+      ansible.builtin.include_tasks: export.yml
+      when: routeros_config_export_dir | length > 0
+
+    - name: Apply the configuration
+      ansible.builtin.include_tasks: apply.yml
+
+    - name: Manage SSH keys
+      ansible.builtin.include_tasks: ssh_keys.yml
+      when: routeros_config_ssh_keys | length > 0 or routeros_config_ssh_keys_exclusive

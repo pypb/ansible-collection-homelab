@@ -1,0 +1,56 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  vars_files:
+    - vars/ports.yml
+  vars:
+    plan: "{{ routeros_config_plan }}"
+    paths: "{{ plan | map(attribute='path') | list }}"
+    by_path: "{{ dict(plan | map(attribute='path') | zip(plan | map(attribute='args'))) }}"
+  tasks:
+    - name: Work out the plan
+      ansible.builtin.include_role:
+        name: pypb.homelab.routeros_config
+        tasks_from: plan
+
+    - name: Check the order of the module calls
+      ansible.builtin.assert:
+        that:
+          - paths == expected
+        fail_msg: "{{ paths | to_json }}"
+      vars:
+        # merge_variables sorts the variables by name, so the ap1 layer comes first
+        # within 0100_system.
+        expected:
+          - system leds settings
+          - system identity
+          - system clock
+          - user
+          - interface bridge
+          - interface ethernet
+          - interface ethernet poe
+          - interface bonding
+          - interface bridge port
+          - interface bridge vlan
+          - tool mac-server
+          - system routerboard wps-button
+
+    - name: Check the merged and rendered entries
+      ansible.builtin.assert:
+        that:
+          - "by_path['system identity'].data == [{'name': 'ap1'}]"
+          - by_path['user'].data | map(attribute='name') | sort == ['admin', 'monitor']
+          - by_path['user'].handle_absent_entries == 'remove'
+          - by_path['tool mac-server'].handle_absent_entries == 'ignore'
+          - by_path['interface ethernet'].data | map(attribute='default-name') | list == ['ether1', 'ether2', 'ether3']
+          - "by_path['interface ethernet poe'].data == [{'name': 'ether2', 'poe-out': 'off'}]"
+          - by_path['interface bridge port'].data | map(attribute='interface') | list == ['ether1', 'ether2', 'bond1']
+          - by_path['interface bridge vlan'].data == expected_vlans
+        fail_msg: "{{ by_path | to_json }}"
+      vars:
+        expected_vlans:
+          - {bridge: bridge1, vlan-ids: 1, tagged: "bridge1,ether1", untagged: bond1}
+          - {bridge: bridge1, vlan-ids: 10, tagged: "bridge1,ether1"}
+          - {bridge: bridge1, vlan-ids: 11, tagged: "ether1,bond1"}
+          - {bridge: bridge1, vlan-ids: 13, untagged: ether2}

@@ -1,0 +1,33 @@
+---
+- name: Converge
+  hosts: all
+  gather_facts: false
+  vars_files:
+    - vars/ports.yml
+  tasks:
+    - name: Work out the plan
+      ansible.builtin.include_role:
+        name: pypb.homelab.routeros_config
+        tasks_from: plan
+
+    - name: Try a step with a mistyped key
+      block:
+        - name: Work out a plan with a mistyped key
+          ansible.builtin.include_role:
+            name: pypb.homelab.routeros_config
+            tasks_from: plan
+          vars:
+            routeros_config_steps_typo:
+              "0900_tool":
+                - path: tool mac-server
+                  modify: []
+
+        - name: Fail if the mistake was accepted
+          ansible.builtin.fail:
+            msg: The plan accepted an operation with a mistyped key.
+      rescue:
+        - name: Check why it failed
+          ansible.builtin.assert:
+            that:
+              - "'exactly one of data, find or command' in ansible_failed_result.msg"
+            quiet: true

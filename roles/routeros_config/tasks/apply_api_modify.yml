@@ -1,0 +1,11 @@
+---
+- name: "Apply with api_modify: {{ __routeros_config_item.step ~ ' ' ~ __routeros_config_item.path }}"
+  community.routeros.api_modify:
+    path: "{{ __routeros_config_item.args.path }}"
+    data: "{{ __routeros_config_item.args.data }}"
+    ensure_order: "{{ __routeros_config_item.args.ensure_order | default(omit) }}"
+    handle_absent_entries: "{{ __routeros_config_item.args.handle_absent_entries | default(omit) }}"
+    handle_entries_content: "{{ __routeros_config_item.args.handle_entries_content | default(omit) }}"
+    handle_read_only: "{{ __routeros_config_item.args.handle_read_only | default(omit) }}"
+    handle_write_only: "{{ __routeros_config_item.args.handle_write_only | default(omit) }}"
+  notify: Save a device backup

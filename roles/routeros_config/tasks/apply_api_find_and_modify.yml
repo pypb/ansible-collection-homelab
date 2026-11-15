@@ -1,0 +1,12 @@
+---
+- name: "Apply with api_find_and_modify: {{ __routeros_config_item.step ~ ' ' ~ __routeros_config_item.path }}"
+  community.routeros.api_find_and_modify:
+    path: "{{ __routeros_config_item.args.path }}"
+    find: "{{ __routeros_config_item.args.find }}"
+    values: "{{ __routeros_config_item.args['values'] }}"
+    allow_no_matches: "{{ __routeros_config_item.args.allow_no_matches | default(omit) }}"
+    ignore_builtin: "{{ __routeros_config_item.args.ignore_builtin | default(omit) }}"
+    ignore_dynamic: "{{ __routeros_config_item.args.ignore_dynamic | default(omit) }}"
+    require_matches_min: "{{ __routeros_config_item.args.require_matches_min | default(omit) }}"
+    require_matches_max: "{{ __routeros_config_item.args.require_matches_max | default(omit) }}"
+  notify: Save a device backup

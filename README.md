@@ -47,6 +47,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.haproxy`](roles/haproxy/README.md) | HAProxy, with frontends, backends and listen sections, checked with `haproxy -c` before they replace the running configuration | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.docker_traefik`](roles/docker_traefik/README.md) | Traefik with Docker Compose, with its static configuration and files of dynamic configuration that it reloads by itself | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.routeros_config`](roles/routeros_config/README.md) | MikroTik RouterOS configuration as code: numbered steps merged from any number of inventory variables and applied through the API, switch ports described once, SSH keys, an export before and an encrypted backup after a change | RouterOS 7 |
 
 ### Playbooks
 
@@ -169,9 +170,24 @@ host. On other hosts it's a plain reboot.
 | `upgrade_cache_valid_time` | `3600` | Seconds the package lists stay valid before they're updated |
 | `upgrade_post_reboot_delay` | `30` | Seconds to wait after a host is back, before checking it |
 
+| Playbook | Description |
+|---|---|
+| [`pypb.homelab.routeros`](playbooks/routeros.yml) | Configures RouterOS devices with `routeros_config`, one at a time, connecting from the controller |
+
+```shell
+ansible-playbook pypb.homelab.routeros --check --diff --limit sw1
+```
+
+The playbook targets the hosts in `routeros_hosts`, which defaults to the
+`routeros` group.
+
 ### Plugins
 
-None yet.
+| Plugin | Type | Description |
+|---|---|---|
+| [`pypb.homelab.routeros_config_plan`](plugins/filter/routeros_config_plan.yml) | filter | Orders and checks the steps of `routeros_config`, joining the operations on the same path |
+| [`pypb.homelab.routeros_config_ports`](plugins/filter/routeros_config_ports.yml) | filter | Turns ports and bridges described once into bridge, ethernet, PoE, bridge port and bridge VLAN entries |
+| [`pypb.homelab.routeros_ssh_fingerprint`](plugins/filter/routeros_ssh_fingerprint.yml) | filter | The SHA256 fingerprint of an SSH public key, as RouterOS shows it |
 
 ### Collection-wide variables
 
@@ -196,6 +212,7 @@ yamllint .
 ansible-lint
 ruff check .
 ansible-test sanity --docker default
+ansible-test units --docker default
 ansible-galaxy collection build
 
 cd extensions
@@ -218,6 +235,7 @@ molecule test --scenario-name fail2ban
 molecule test --scenario-name wireguard
 molecule test --scenario-name haproxy
 molecule test --scenario-name docker_traefik
+molecule test --scenario-name routeros_config
 molecule test --scenario-name site
 molecule test --scenario-name upgrade
 ```
@@ -226,7 +244,8 @@ The molecule scenarios need Docker, or Podman with its API socket enabled and
 `DOCKER_HOST` pointing to it, and the `docker` command, which can be Podman's. They also
 need this collection, `ansible.posix`, `community.docker`, `community.crypto` and
 `community.general` on `ANSIBLE_COLLECTIONS_PATH`, and the `site` scenario also
-`community.zabbix`.
+`community.zabbix`. The `routeros_config` scenario only works out the plan, so it
+needs no container or device.
 
 Describe each change in a fragment under `changelogs/fragments/`, then generate
 the changelog at release time with `antsibull-changelog release`.

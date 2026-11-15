@@ -1,0 +1,73 @@
+---
+DOCUMENTATION:
+  name: routeros_config_ports
+  short_description: Turn a description of RouterOS ports and bridges into configuration steps
+  version_added: 0.3.0
+  author: pypb
+  description:
+    - Describes each port once, with its comment, PoE, bridge, PVID and tagged VLANs,
+      and returns the steps for C(interface bridge), C(interface ethernet),
+      C(interface ethernet poe), C(interface bridge port) and C(interface bridge vlan).
+    - A bridge port is untagged in its PVID, unless the PVID is also among its tagged
+      VLANs or its frame types are C(admit-only-vlan-tagged).
+    - Bridge VLAN entries are only made for bridges with C(vlan_filtering), one per
+      VLAN, or one per set of VLANs with the same members when C(group_vlans) is true.
+    - Bridge VLAN members are listed with the bridge itself first and then in the order
+      of the ports, since RouterOS reads them back in its own order of interfaces and
+      api_modify compares them as text. A single VLAN ID is a number, as RouterOS reads it.
+    - The result is meant to be merged with other steps and passed to
+      P(pypb.homelab.routeros_config_plan#filter).
+  options:
+    _input:
+      description:
+        - Port names mapped to dicts with any of C(comment), C(ethernet), C(poe),
+          C(bridge), C(pvid), C(tagged), C(frame_types), C(hw) and C(bridge_port).
+        - See the P(pypb.homelab.routeros_config#role) role for what each one does.
+      type: dict
+      required: true
+    bridges:
+      description:
+        - Bridge names mapped to dicts with any of C(vlan_filtering), C(tagged_vlans),
+          C(group_vlans), C(cpu_interface) and C(settings).
+      type: dict
+      default: {}
+    steps:
+      description:
+        - The step each kind of entry is added to, with the keys C(bridge),
+          C(ethernet), C(port) and C(vlan).
+      type: dict
+      default:
+        bridge: 0200_bridge
+        ethernet: 0200_ethernet
+        port: 0220_bridge_port
+        vlan: 0230_bridge_vlan
+    ethernet_pattern:
+      description: Ports whose names match this regular expression get an C(interface ethernet) entry for their comment.
+      type: str
+      default: ^(ether|sfp|qsfp|combo)\d
+
+EXAMPLES: |
+  - name: Show the steps for two ports on a VLAN-filtering bridge
+    ansible.builtin.debug:
+      msg: "{{ ports | pypb.homelab.routeros_config_ports(bridges) }}"
+    vars:
+      bridges:
+        bridge1:
+          vlan_filtering: true
+          tagged_vlans: [1, 10]
+      ports:
+        ether1:
+          comment: uplink
+          bridge: bridge1
+          tagged: [1, 10]
+        ether2:
+          comment: printer
+          bridge: bridge1
+          pvid: 10
+          frame_types: admit-only-untagged-and-priority-tagged
+          poe: {poe-out: "off"}
+
+RETURN:
+  _value:
+    description: Step names mapped to lists of api_modify operations.
+    type: dict

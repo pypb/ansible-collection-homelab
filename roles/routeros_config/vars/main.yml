@@ -1,0 +1,2 @@
+---
+__routeros_config_steps_pattern: ^routeros_config_steps_.+$
