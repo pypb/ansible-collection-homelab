@@ -1,0 +1,143 @@
+---
+# Packages to install: AppArmor, password strength checks and package checksums.
+server_hardening_packages:
+  - apparmor
+  - debsums
+  - libpam-passwdqc
+
+# Packages to purge: network services, auditing tools that report rather than
+# protect, and usage reporting.
+server_hardening_purged_packages:
+  - avahi-daemon
+  - chkrootkit
+  - debsecan
+  - hardening-runtime
+  - inetutils-talk
+  - inetutils-talkd
+  - inetutils-telnet
+  - lynis
+  - popularity-contest
+  - rkhunter
+  - talk
+  - talkd
+  - telnet*
+
+# Packages to purge on Ubuntu only: crash reporting.
+server_hardening_ubuntu_purged_packages:
+  - apport
+  - apport-symptoms
+  - python3-apport
+
+# Keep wifi and bluetooth. False purges their packages and, on a Raspberry Pi,
+# turns the radios off in config.txt from the next boot.
+server_hardening_wifi: false
+server_hardening_bluetooth: false
+
+# Systemd units to stop and mask. Units taken off the list stay masked.
+server_hardening_masked_units:
+  - portmap.service
+  - rpc-gssd.service
+  - rpc-statd-notify.service
+  - rpc-svcgssd.service
+  - rpcbind.service
+  - rpcbind.socket
+  - rsync.service
+  - ua-reboot-cmds.service
+  - ubuntu-advantage.service
+
+# Kernel modules that can't be loaded: rare network protocols, FireWire, rarely
+# used file systems, and drivers servers don't need. With
+# server_hardening_bluetooth false, bluetooth and btusb are added.
+server_hardening_blocked_modules:
+  - af_802154
+  - appletalk
+  - atm
+  - ax25
+  - can
+  - dccp
+  - decnet
+  - econet
+  - ipx
+  - n-hdlc
+  - netrom
+  - p8022
+  - p8023
+  - psnap
+  - rds
+  - rose
+  - sctp
+  - tipc
+  - x25
+  - firewire-core
+  - firewire-ohci
+  - firewire-sbp2
+  - cramfs
+  - freevxfs
+  - hfs
+  - hfsplus
+  - jffs2
+  - squashfs
+  - udf
+  - floppy
+  - ksmbd
+  - uvcvideo
+  - vivid
+
+# More modules to block, such as a mitigation for a vulnerable driver.
+server_hardening_extra_blocked_modules: []
+
+# Settings for /etc/sysctl.d/90-server-hardening.conf, from
+# https://madaidans-insecurities.github.io/guides/linux-hardening.html
+server_hardening_sysctl:
+  dev.tty.ldisc_autoload: 0
+  fs.protected_fifos: 1
+  fs.protected_hardlinks: 1
+  fs.protected_regular: 2
+  fs.protected_symlinks: 1
+  fs.suid_dumpable: 0
+  kernel.core_uses_pid: 1
+  kernel.dmesg_restrict: 1
+  kernel.kexec_load_disabled: 1
+  kernel.kptr_restrict: 2
+  kernel.perf_event_paranoid: 3
+  kernel.randomize_va_space: 2
+  kernel.sysrq: 0
+  kernel.unprivileged_bpf_disabled: 1
+  kernel.yama.ptrace_scope: 2
+  net.core.bpf_jit_harden: 2
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.tcp_challenge_ack_limit: 2147483647
+  net.ipv4.tcp_dsack: 0
+  net.ipv4.tcp_fack: 0
+  net.ipv4.tcp_invalid_ratelimit: 500
+  net.ipv4.tcp_max_syn_backlog: 4096
+  net.ipv4.tcp_rfc1337: 1
+  net.ipv4.tcp_sack: 0
+  net.ipv4.tcp_syn_retries: 5
+  net.ipv4.tcp_synack_retries: 2
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.tcp_timestamps: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+
+# Lines for /etc/security/limits.d/90-server-hardening.conf. The file is removed
+# when empty.
+server_hardening_limits:
+  - "* hard core 0"
+
+# Seconds an idle login shell stays open, as TMOUT. Not managed when null.
+server_hardening_shell_timeout: 86400
+
+# How often debsums checks the installed files: daily, weekly, monthly or never.
+server_hardening_debsums_cron: daily
+
+# Files and directories to delete, such as /etc/ssh/sshd_config.d/50-cloud-init.conf,
+# which turns on password logins on cloud images.
+server_hardening_removed_files: []

@@ -1,0 +1,14 @@
+---
+- name: Install packages
+  ansible.builtin.apt:
+    name: "{{ server_hardening_packages }}"
+    update_cache: true
+    cache_valid_time: 3600
+  when: server_hardening_packages | length > 0
+
+- name: Purge packages
+  ansible.builtin.apt:
+    name: "{{ __server_hardening_purge }}"
+    state: absent
+    purge: true
+  when: __server_hardening_purge | length > 0

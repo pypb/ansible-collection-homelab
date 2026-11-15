@@ -1,0 +1,6 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+# The package lists stay, so that apt can find packages in check mode. timedatectl
+# needs D-Bus.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-apt systemd systemd-sysv dbus

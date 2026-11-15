@@ -18,6 +18,8 @@ migrated into `roles/`.
   - `iscsi_initiator`: sets up open-iscsi and logs in to targets, with optional multipathd
   - `server_baseline`: basic configuration of a Debian or Ubuntu server, including
     resolv.conf, journald, motd and the kernel consoles and GRUB menu
+  - `server_hardening`: opt-in hardening beyond the baseline: sysctl, blocked
+    kernel modules, masked services, purged packages, wifi and bluetooth
   - `swap`: zram swap with systemd-zram-generator, and encrypted swap in a file
     through crypttab
   - `unattended_upgrades`: installs upgrades automatically, with reports and reboots

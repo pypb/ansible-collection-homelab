@@ -1,0 +1,30 @@
+---
+# Minimal Debian installs don't have them.
+- name: Create the sysctl and modprobe directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+  loop:
+    - "{{ __server_hardening_sysctl_file | dirname }}"
+    - "{{ __server_hardening_modprobe_file | dirname }}"
+
+- name: Write the sysctl settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: "{{ __server_hardening_sysctl_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the sysctl settings
+
+# Modules already loaded stay loaded until the next boot.
+- name: Block kernel modules
+  ansible.builtin.template:
+    src: modprobe.conf.j2
+    dest: "{{ __server_hardening_modprobe_file }}"
+    owner: root
+    group: root
+    mode: "0644"

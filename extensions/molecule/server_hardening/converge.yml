@@ -1,0 +1,30 @@
+---
+- name: Converge servers with every setting
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Gather the virtualisation facts
+      ansible.builtin.setup:
+        gather_subset: [min, virtual]
+
+    # The containers are privileged and share this machine's kernel, so sysctl
+    # settings the role applied would change it.
+    - name: Check the role sees a container
+      ansible.builtin.assert:
+        that: ansible_facts['virtualization_type'] in ['docker', 'podman', 'container', 'containerd']
+        fail_msg: "Not detected as a container: {{ ansible_facts['virtualization_type'] }}"
+
+    - name: Harden the server
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_hardening
+      vars:
+        # Only settings that are per network namespace, in case they get applied.
+        server_hardening_sysctl:
+          net.ipv4.conf.all.log_martians: 1
+          net.ipv4.icmp_echo_ignore_broadcasts: 1
+        server_hardening_extra_blocked_modules: [esp4, rxrpc]
+        server_hardening_shell_timeout: 3600
+        server_hardening_debsums_cron: weekly
+        server_hardening_removed_files:
+          - /etc/ssh/sshd_config.d/50-cloud-init.conf
+          - /root/dead.letter

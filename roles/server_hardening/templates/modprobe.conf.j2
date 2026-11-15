@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Loading any of these modules fails, also when something asks for it by name.
+{% for module in __server_hardening_blocked_modules %}
+install {{ module }} /bin/false
+blacklist {{ module }}
+{% endfor %}

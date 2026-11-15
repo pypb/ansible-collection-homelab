@@ -1,0 +1,75 @@
+---
+# Masking works for units that aren't installed, so they can't start once they are.
+- name: Mask systemd units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ server_hardening_masked_units }}"
+
+# Stopping a unit that isn't installed fails, so only the running ones are stopped.
+- name: Find the masked units that are running
+  ansible.builtin.command:
+    argv: "{{ ['systemctl', 'is-active'] + server_hardening_masked_units }}"
+  register: __server_hardening_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: server_hardening_masked_units | length > 0
+
+- name: Stop the masked units
+  ansible.builtin.systemd_service:
+    name: "{{ item.0 }}"
+    state: stopped
+  loop: "{{ server_hardening_masked_units | zip(__server_hardening_active['stdout_lines'] | default([])) }}"
+  loop_control:
+    label: "{{ item.0 }}"
+  when: item.1 in ['active', 'activating', 'reloading']
+
+- name: Write the resource limits
+  ansible.builtin.template:
+    src: limits.conf.j2
+    dest: "{{ __server_hardening_limits_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: server_hardening_limits | length > 0
+
+- name: Remove the resource limits
+  ansible.builtin.file:
+    path: "{{ __server_hardening_limits_file }}"
+    state: absent
+  when: server_hardening_limits | length == 0
+
+- name: Close idle login shells
+  ansible.builtin.template:
+    src: profile.sh.j2
+    dest: "{{ __server_hardening_profile_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: server_hardening_shell_timeout is not none
+
+- name: Stop closing idle login shells
+  ansible.builtin.file:
+    path: "{{ __server_hardening_profile_file }}"
+    state: absent
+  when: server_hardening_shell_timeout is none
+
+# In check mode, debsums may not be installed yet.
+- name: Look for the debsums settings
+  ansible.builtin.stat:
+    path: /etc/default/debsums
+  register: __server_hardening_debsums
+
+- name: Set how often debsums checks the installed files
+  ansible.builtin.lineinfile:
+    path: /etc/default/debsums
+    regexp: "^CRON_CHECK="
+    line: "CRON_CHECK={{ server_hardening_debsums_cron }}"
+  when: __server_hardening_debsums['stat']['exists']
+
+- name: Delete files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ server_hardening_removed_files }}"
