@@ -1,0 +1,37 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - __nftables_input_rules | reject('string') | length == 0
+      - __nftables_input_rules | select('search', '\n') | length == 0
+      - nftables_input_log_prefix is not search('[\n"]')
+    fail_msg: >-
+      nftables_input_rules and nftables_input_extra_rules must be lists of rules, each on
+      one line. nftables_input_log_prefix must be one line without double quotes.
+    quiet: true
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    update_cache: true
+    cache_valid_time: 3600
+  register: __nftables_install
+
+- name: Write the rules
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ __nftables_config }}"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: nft --check --file %s
+  notify: Load the nftables rules
+
+# Loads the rules at boot.
+- name: Enable nftables
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started
+  # In check mode, the package may not be installed yet.
+  when: not (ansible_check_mode and __nftables_install is changed)

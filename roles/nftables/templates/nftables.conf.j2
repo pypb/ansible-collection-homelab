@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+
+# Only this table is replaced. Tables of other tools, such as fail2ban's and
+# Kubernetes', are left alone.
+table inet filter
+delete table inet filter
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0;
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+        udp sport bootps udp dport bootpc counter accept
+        ip protocol icmp accept
+        ip6 nexthdr icmpv6 icmpv6 type { echo-request } accept
+        ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
+{% for rule in __nftables_input_rules %}
+        {{ rule }}
+{% endfor %}
+{% if nftables_input_log_prefix | length > 0 %}
+        log prefix {{ nftables_input_log_prefix | to_json }}
+{% endif %}
+        counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0;
+    }
+
+    chain output {
+        type filter hook output priority 0;
+    }
+}

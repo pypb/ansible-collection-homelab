@@ -58,6 +58,8 @@ jobs:
           - unattended_upgrades
           - chrony
           - users
+          - nftables
+          - fail2ban
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

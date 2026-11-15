@@ -1,0 +1,40 @@
+---
+- name: Verify fail2ban
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the sshd jail's settings
+      ansible.builtin.command:
+        argv: [fail2ban-client, get, sshd, "{{ item }}"]
+      loop: [ignoreip, bantime, actions]
+      register: __molecule_jail
+      changed_when: false
+
+    - name: Check the sshd jail's settings
+      ansible.builtin.assert:
+        that:
+          - __molecule_jail['results'][0]['stdout'] is search('192\.0\.2\.0/24')
+          - __molecule_jail['results'][1]['stdout'] | trim == '7200'
+          - __molecule_jail['results'][2]['stdout'] is search('nftables-multiport')
+
+    - name: Ban an address
+      ansible.builtin.command:
+        argv: [fail2ban-client, set, sshd, banip, 198.51.100.7]
+      changed_when: true
+
+    - name: Read fail2ban's nftables table
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, f2b-table]
+      register: __molecule_f2b
+      changed_when: false
+
+    - name: Check the ban is in a prerouting chain
+      ansible.builtin.assert:
+        that:
+          - __molecule_f2b['stdout'] is search('198\.51\.100\.7')
+          - __molecule_f2b['stdout'] is search('hook prerouting priority')
+
+    - name: Lift the ban
+      ansible.builtin.command:
+        argv: [fail2ban-client, set, sshd, unbanip, 198.51.100.7]
+      changed_when: true

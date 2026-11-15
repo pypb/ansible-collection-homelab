@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: nftables
+  namespace: pypb
+  author: pypb
+  description: A host firewall with nftables, which drops input that its rules don't accept.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - nftables
+    - firewall
+    - networking
+    - debian
+    - ubuntu
+dependencies: []
