@@ -1,0 +1,5 @@
+---
+minor_changes:
+  - haproxy - new role that installs HAProxy and writes its global and defaults
+    sections, frontends, backends and listen sections. The configuration is checked
+    with haproxy -c before it's written, and HAProxy reloads after a change.

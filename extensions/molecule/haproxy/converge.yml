@@ -1,0 +1,21 @@
+---
+- name: Converge a load balancer
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up HAProxy
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy
+      vars:
+        haproxy_frontends:
+          web: |
+            bind 127.0.0.1:8080
+            default_backend app
+        haproxy_backends:
+          app: |
+            server app1 127.0.0.1:8081 check
+        haproxy_listens:
+          # Stands in for the application behind the backend.
+          app_server: |
+            bind 127.0.0.1:8081
+            http-request return status 200 content-type text/plain string "hello from the backend"

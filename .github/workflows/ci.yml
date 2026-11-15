@@ -61,6 +61,7 @@ jobs:
           - nftables
           - fail2ban
           - wireguard
+          - haproxy
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

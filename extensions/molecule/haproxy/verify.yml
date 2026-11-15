@@ -1,0 +1,59 @@
+---
+- name: Verify the load balancer
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Request a page through the frontend and backend
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        return_content: true
+      register: __molecule_page
+      retries: 5
+      delay: 2
+      until: __molecule_page is succeeded
+
+    - name: Check the backend answered
+      ansible.builtin.assert:
+        that: __molecule_page['content'] == 'hello from the backend'
+
+    - name: Read whether HAProxy starts at boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, haproxy]
+      changed_when: false
+
+    - name: Read the configuration before a broken change
+      ansible.builtin.slurp:
+        src: /etc/haproxy/haproxy.cfg
+      register: __molecule_before
+
+    - name: Try a broken configuration
+      block:
+        - name: Set up HAProxy with a broken backend
+          ansible.builtin.include_role:
+            name: pypb.homelab.haproxy
+          vars:
+            haproxy_backends:
+              app: |
+                server app1 127.0.0.1:8081 no-such-keyword
+      rescue:
+        - name: Note the failure
+          ansible.builtin.set_fact:
+            __molecule_rejected: true
+
+    - name: Read the configuration after the broken change
+      ansible.builtin.slurp:
+        src: /etc/haproxy/haproxy.cfg
+      register: __molecule_after
+
+    - name: Request a page after the broken change
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        return_content: true
+      register: __molecule_page_after
+
+    - name: Check the broken configuration was rejected and HAProxy kept running
+      ansible.builtin.assert:
+        that:
+          - __molecule_rejected | default(false)
+          - __molecule_after['content'] == __molecule_before['content']
+          - __molecule_page_after['content'] == 'hello from the backend'

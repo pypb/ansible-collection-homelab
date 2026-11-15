@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+global
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    daemon
+    {{ haproxy_global | trim | indent(4) }}
+
+defaults
+    {{ haproxy_defaults | trim | indent(4) }}
+{% for section in __haproxy_sections %}
+
+{{ section['type'] }} {{ section['key'] }}
+    {{ section['value'] | trim | indent(4) }}
+{% endfor %}

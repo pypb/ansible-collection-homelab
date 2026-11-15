@@ -1,0 +1,7 @@
+---
+__haproxy_config: /etc/haproxy/haproxy.cfg
+
+__haproxy_sections: >-
+  {{ (haproxy_frontends | dict2items | map('combine', {'type': 'frontend'}) | list)
+     + (haproxy_backends | dict2items | map('combine', {'type': 'backend'}) | list)
+     + (haproxy_listens | dict2items | map('combine', {'type': 'listen'}) | list) }}
