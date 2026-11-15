@@ -36,6 +36,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.swap`](roles/swap/README.md) | Swap in compressed RAM with zram, encrypted swap on disk with a new key at every boot, and removing other swap files | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.unattended_upgrades`](roles/unattended_upgrades/README.md) | Installs upgrades automatically with unattended-upgrades, with reports, automatic reboots and any other apt settings | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.chrony`](roles/chrony/README.md) | Keeps the clock in sync with chrony, with sources and settings in its drop-in directories, replacing the distribution's sources | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.users`](roles/users/README.md) | Local groups and accounts with their SSH keys, including the account Ansible uses, and deletes an image's default accounts | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
@@ -103,6 +104,7 @@ molecule test --scenario-name server_hardening
 molecule test --scenario-name swap
 molecule test --scenario-name unattended_upgrades
 molecule test --scenario-name chrony
+molecule test --scenario-name users
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and

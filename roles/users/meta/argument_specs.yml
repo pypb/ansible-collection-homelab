@@ -1,0 +1,96 @@
+---
+argument_specs:
+  main:
+    short_description: Manages local groups and accounts with their SSH keys.
+    description:
+      - Creates groups and accounts, sets the mode of their home directories and writes their authorized SSH keys.
+      - Deletes accounts and groups, such as an image's default accounts, but never the account Ansible is logged in as.
+      - The account Ansible uses is managed like any other, so a first run as another account can create it.
+    author:
+      - pypb
+    options:
+      users_groups:
+        type: list
+        elements: dict
+        default: []
+        description: Groups to create.
+        options:
+          name:
+            type: str
+            required: true
+            description: The group's name.
+          gid:
+            type: int
+            description: Its group ID.
+          system:
+            type: bool
+            description: Create it as a system group.
+      users_accounts:
+        type: list
+        elements: dict
+        default: []
+        description: Accounts to create or update. Their home directories are created.
+        options:
+          name:
+            type: str
+            required: true
+            description: The account's name.
+          uid:
+            type: int
+            description: Its user ID.
+          group:
+            type: str
+            description: Its primary group, which must exist. A group of the same name is created when not set.
+          groups:
+            type: list
+            elements: str
+            description: Other groups, added to the ones it already has.
+          comment:
+            type: str
+            description: Its full name or description.
+          shell:
+            type: str
+            description: Its login shell.
+          password:
+            type: str
+            description: Its password as a crypt hash, such as from C(mkpasswd -m yescrypt). Use C(!) or C(*) for no password.
+          update_password:
+            type: str
+            choices: [always, on_create]
+            description: When to set the password. Defaults to O(users_update_password).
+          system:
+            type: bool
+            description: Create it as a system account.
+          authorized_keys:
+            type: list
+            elements: str
+            description: Public SSH keys that can log in as it.
+          authorized_keys_exclusive:
+            type: bool
+            default: false
+            description: Remove the keys in its C(authorized_keys) that aren't in O(users_accounts[].authorized_keys).
+      users_update_password:
+        type: str
+        default: on_create
+        choices: [always, on_create]
+        description: When to set an account's password, for those that don't say.
+      users_home_mode:
+        type: str
+        default: "0700"
+        description: Mode of the accounts' home directories, quoted.
+      users_removed_accounts:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Accounts to delete, such as C(pi) or an image's bootstrap account.
+          - The account Ansible is logged in as is skipped with a message, so the next run as another account deletes it.
+      users_removed_groups:
+        type: list
+        elements: str
+        default: []
+        description: Groups to delete.
+      users_remove_home:
+        type: bool
+        default: false
+        description: Delete the home directories and mail spools of deleted accounts.

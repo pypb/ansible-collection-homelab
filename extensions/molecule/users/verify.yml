@@ -1,0 +1,56 @@
+---
+- name: Verify the accounts
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the account and group databases
+      ansible.builtin.getent:
+        database: "{{ item }}"
+      loop: [passwd, group]
+      register: __molecule_getent
+
+    - name: Check the accounts and groups
+      ansible.builtin.assert:
+        that:
+          - __passwd['automation'][1:3] == ['2100', '2100']
+          - __passwd['automation'][3] == 'Automation'
+          - __passwd['automation'][5] == '/bin/sh'
+          - __passwd['alice'][5] == '/bin/bash'
+          - "'root' in __passwd"
+          - "'pi' not in __passwd"
+          - "'oldgroup' not in __group"
+          - __group['automation'][1] == '2100'
+          - "'automation' in __group['sudo'][2].split(',')"
+          - "'alice' in __group['adm'][2].split(',')"
+      vars:
+        __passwd: "{{ __molecule_getent['results'][0]['ansible_facts']['getent_passwd'] }}"
+        __group: "{{ __molecule_getent['results'][1]['ansible_facts']['getent_group'] }}"
+
+    - name: Read the keys, home directories and the kept file
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /home/automation/.ssh/authorized_keys
+        - /home/alice/.ssh/authorized_keys
+        - /home/alice/keep.txt
+      register: __molecule_files
+
+    - name: Check the keys and the kept file
+      ansible.builtin.assert:
+        that:
+          - __contents[0] == "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMvrDS66b4lgn4yzsn8vEBx7z+IK1MhmGfvtAnYHIKHY molecule-one\n"
+          - __contents[1] == "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKjba5fWqC0xHpxMrXAVte/QBtwNaRf7cPaKeG+rQkZV molecule-two\n"
+          - __contents[2] == "keep\n"
+      vars:
+        __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+
+    - name: Read the home directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/home/automation, /home/alice, /home/pi]
+      register: __molecule_homes
+
+    - name: Check the home directories
+      ansible.builtin.assert:
+        that:
+          - __molecule_homes['results'] | map(attribute='stat.mode', default='missing') | list == ['0700', '0700', 'missing']

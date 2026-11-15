@@ -1,0 +1,91 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: [min]
+  when: __users_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - users_groups | rejectattr('name', 'defined') | length == 0
+      - users_accounts | rejectattr('name', 'defined') | length == 0
+      - users_groups | map(attribute='name') | reject('match', __users_name_pattern) | length == 0
+      - users_accounts | map(attribute='name') | reject('match', __users_name_pattern) | length == 0
+      - users_accounts | map(attribute='name') | intersect(users_removed_accounts) | length == 0
+      - users_groups | map(attribute='name') | intersect(users_removed_groups) | length == 0
+      - users_accounts | selectattr('authorized_keys', 'defined') | map(attribute='authorized_keys')
+        | reject('sequence') | length == 0
+      - users_accounts | selectattr('authorized_keys', 'defined') | map(attribute='authorized_keys')
+        | select('string') | length == 0
+    fail_msg: >-
+      Every group and account needs a name, made of lower-case letters, digits and _.-.
+      An account or group can't be both created and deleted, and authorized_keys must be a list.
+    quiet: true
+
+- name: Create groups
+  ansible.builtin.group:
+    name: "{{ item['name'] }}"
+    gid: "{{ item['gid'] | default(omit) }}"
+    system: "{{ item['system'] | default(omit) }}"
+  loop: "{{ users_groups }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+
+# Groups are added to the ones an account already has.
+- name: Create accounts
+  ansible.builtin.user:
+    name: "{{ item['name'] }}"
+    uid: "{{ item['uid'] | default(omit) }}"
+    group: "{{ item['group'] | default(omit) }}"
+    groups: "{{ item['groups'] | default(omit) }}"
+    append: true
+    comment: "{{ item['comment'] | default(omit) }}"
+    shell: "{{ item['shell'] | default(omit) }}"
+    password: "{{ item['password'] | default(omit) }}"
+    update_password: "{{ item['update_password'] | default(users_update_password) }}"
+    system: "{{ item['system'] | default(omit) }}"
+    create_home: true
+  loop: "{{ users_accounts }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  register: __users_created
+
+- name: Set the mode of home directories
+  ansible.builtin.file:
+    path: "{{ item['home'] }}"
+    mode: "{{ users_home_mode }}"
+    state: directory
+  loop: "{{ __users_created['results'] | selectattr('home', 'defined') }}"
+  loop_control:
+    label: "{{ item['item']['name'] }}"
+
+- name: Write the authorized SSH keys
+  ansible.posix.authorized_key:
+    user: "{{ item['name'] }}"
+    key: "{{ item['authorized_keys'] | join('\n') }}"
+    exclusive: "{{ item['authorized_keys_exclusive'] | default(false) }}"
+  loop: "{{ users_accounts | selectattr('authorized_keys', 'defined') }}"
+  loop_control:
+    label: "{{ item['name'] }}"
+  when:
+    - item['authorized_keys'] | length > 0 or item['authorized_keys_exclusive'] | default(false)
+    # In check mode, the accounts the run would create don't exist yet.
+    - item['name'] not in __users_pending
+
+- name: Report the account Ansible is logged in as
+  ansible.builtin.debug:
+    msg: "{{ __users_login_account }} isn't deleted, since Ansible is logged in as it. Run again as another account."
+  when: __users_login_account in users_removed_accounts
+
+- name: Delete accounts
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: "{{ users_remove_home }}"
+  loop: "{{ users_removed_accounts | difference([__users_login_account]) }}"
+
+- name: Delete groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ users_removed_groups }}"

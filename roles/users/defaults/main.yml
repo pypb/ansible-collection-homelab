@@ -1,0 +1,32 @@
+---
+# Groups to create, as a list of name and optional gid and system.
+users_groups: []
+#  - name: alice
+#    gid: 2001
+
+# Accounts to create. Each has a name, and optionally uid, group, groups,
+# comment, shell, password (a hash), update_password, system,
+# authorized_keys and authorized_keys_exclusive.
+users_accounts: []
+#  - name: alice
+#    uid: 2001
+#    group: alice
+#    groups: [adm, sudo]
+#    shell: /bin/bash
+#    password: "{{ vault_alice_password_hash }}"
+#    authorized_keys:
+#      - ssh-ed25519 AAAA... alice@laptop
+
+# When to set an account's password: on_create, or always to keep it as given.
+users_update_password: on_create
+
+# Mode of the accounts' home directories.
+users_home_mode: "0700"
+
+# Accounts and groups to delete, such as the default accounts of an image.
+# The account Ansible is logged in as is never deleted.
+users_removed_accounts: []
+users_removed_groups: []
+
+# Delete the home directories and mail spools of deleted accounts.
+users_remove_home: false
