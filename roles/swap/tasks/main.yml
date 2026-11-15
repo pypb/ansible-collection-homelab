@@ -59,7 +59,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Apply the sysctl settings
+  notify: Apply the swap sysctl settings
   when: __swap_sysctl | length > 0
 
 # The settings stay until the next boot.

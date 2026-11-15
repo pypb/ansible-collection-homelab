@@ -18,7 +18,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Apply the sysctl settings
+  notify: Apply the hardening sysctl settings
 
 # Modules already loaded stay loaded until the next boot.
 - name: Block kernel modules

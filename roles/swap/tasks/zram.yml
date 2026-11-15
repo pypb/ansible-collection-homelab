@@ -6,7 +6,7 @@
     path: /etc/fstab
     regexp: '^\s*/dev/zram[0-9]+\s'
     state: absent
-  notify: Reload systemd
+  notify: Reload systemd for the swap units
 
 - name: Set up zram swap
   when: swap_zram_enabled | bool
@@ -46,7 +46,7 @@
         group: root
         mode: "0644"
       notify:
-        - Reload systemd
+        - Reload systemd for the swap units
         - Start the zram swap
 
 - name: Remove zram swap
@@ -68,7 +68,7 @@
       ansible.builtin.file:
         path: "{{ __swap_zram_conf }}"
         state: absent
-      notify: Reload systemd
+      notify: Reload systemd for the swap units
 
     # Its own settings would still set up a device.
     - name: Purge systemd-zram-generator
@@ -76,4 +76,4 @@
         name: systemd-zram-generator
         state: absent
         purge: true
-      notify: Reload systemd
+      notify: Reload systemd for the swap units

@@ -1,17 +1,17 @@
 ---
 # Applies only the role's file.
-- name: Apply the sysctl settings
+- name: Apply the baseline sysctl settings
   ansible.builtin.command:
     argv: [/usr/lib/systemd/systemd-sysctl, "/etc/sysctl.d/{{ server_baseline_sysctl_file }}"]
   changed_when: true
 
-- name: Restart journald
+- name: Restart journald for the baseline settings
   ansible.builtin.systemd_service:
     name: systemd-journald
     state: restarted
 
 # Containers have no GRUB installed.
-- name: Update GRUB
+- name: Update GRUB for the baseline consoles
   ansible.builtin.command:
     argv: [update-grub]
     removes: /boot/grub/grub.cfg

@@ -1,6 +1,6 @@
 ---
 # Runs the generators again, for fstab, crypttab and the zram devices.
-- name: Reload systemd
+- name: Reload systemd for the swap units
   ansible.builtin.systemd_service:
     daemon_reload: true
 
@@ -25,7 +25,7 @@
     - not __swap_encrypted_open['stat']['exists']
 
 # Applies only the role's file.
-- name: Apply the sysctl settings
+- name: Apply the swap sysctl settings
   ansible.builtin.command:
     argv: [/usr/lib/systemd/systemd-sysctl, "/etc/sysctl.d/{{ swap_sysctl_file }}"]
   changed_when: true

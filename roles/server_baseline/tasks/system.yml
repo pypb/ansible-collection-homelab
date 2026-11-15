@@ -15,7 +15,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Apply the sysctl settings
+  notify: Apply the baseline sysctl settings
 
 # In check mode, tzdata may not be installed yet.
 - name: Set the time zone

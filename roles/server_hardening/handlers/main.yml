@@ -1,6 +1,6 @@
 ---
 # Applies only the role's file. Containers share their host's kernel.
-- name: Apply the sysctl settings
+- name: Apply the hardening sysctl settings
   ansible.builtin.command:
     argv: [/usr/lib/systemd/systemd-sysctl, "{{ __server_hardening_sysctl_file }}"]
   changed_when: true

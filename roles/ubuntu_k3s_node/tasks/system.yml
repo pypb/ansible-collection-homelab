@@ -34,7 +34,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Apply sysctl settings
+  notify: Apply the k3s node sysctl settings
 
 - name: Blacklist kernel modules
   ansible.builtin.template:
@@ -43,7 +43,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Update initramfs
+  notify: Update initramfs for the k3s node
 
 # The file name is the one Cilium's documentation uses. It sorts after the
 # distribution's files, so its settings win.
@@ -55,7 +55,7 @@
     group: root
     mode: "0644"
   when: ubuntu_k3s_node_cilium | bool
-  notify: Apply sysctl settings
+  notify: Apply the k3s node sysctl settings
 
 - name: Load kernel modules for Cilium at boot
   ansible.builtin.template:
