@@ -1,0 +1,31 @@
+---
+- name: Prepare hosts with Docker
+  hosts: targets
+  tasks:
+    # Overlays don't nest in every test container, so Docker copies image layers
+    # instead.
+    - name: Create Docker's configuration directory
+      ansible.builtin.file:
+        path: /etc/docker
+        state: directory
+        mode: "0755"
+
+    - name: Configure Docker's storage
+      ansible.builtin.copy:
+        content: |
+          {"storage-driver": "vfs", "features": {"containerd-snapshotter": false}}
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+
+    # Debian's docker-compose is the Compose plugin; Ubuntu's is the old one.
+    - name: Install Docker and its Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - "{{ 'docker-compose' if ansible_facts['distribution'] == 'Debian' else 'docker-compose-v2' }}"
+        update_cache: true
+
+    - name: Start Docker
+      ansible.builtin.systemd_service:
+        name: docker
+        state: started

@@ -1,0 +1,49 @@
+---
+- name: Create test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars:
+    __molecule_platforms:
+      - name: traefik-debian13
+        image: docker.io/library/debian:13
+      - name: traefik-ubuntu2404
+        image: docker.io/library/ubuntu:24.04
+  tasks:
+    # The CLI works with both Docker and Podman. The image build module needs buildx.
+    - name: Build systemd test images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --build-arg
+          - "BASE_IMAGE={{ item['image'] }}"
+          - --tag
+          - "localhost/molecule-{{ item['name'] }}:latest"
+          - --file
+          - "{{ playbook_dir }}/Containerfile"
+          - "{{ playbook_dir }}"
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"
+      changed_when: false
+
+    - name: Start systemd test containers
+      community.docker.docker_container:
+        name: "{{ item['name'] }}"
+        image: "localhost/molecule-{{ item['name'] }}:latest"
+        hostname: "{{ item['name'] }}"
+        command: /lib/systemd/systemd
+        privileged: true
+        # A cgroup namespace of its own, so that Docker in it can create cgroups.
+        cgroupns_mode: private
+        volumes:
+          # Docker's storage can't sit on the container's own overlay.
+          - /var/lib/docker
+        tmpfs:
+          - /run
+          - /run/lock
+          - /tmp
+        state: started
+      loop: "{{ __molecule_platforms }}"
+      loop_control:
+        label: "{{ item['name'] }}"

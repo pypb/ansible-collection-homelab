@@ -1,0 +1,14 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+        # Including the anonymous volume for Docker's storage.
+        keep_volumes: false
+      loop:
+        - traefik-debian13
+        - traefik-ubuntu2404

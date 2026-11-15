@@ -1,0 +1,63 @@
+---
+argument_specs:
+  main:
+    short_description: Runs Traefik with Docker Compose.
+    description:
+      - Writes a Compose project for Traefik, with its static configuration and files of dynamic configuration, and starts it.
+      - Docker and its Compose plugin must be installed.
+      - Traefik restarts when the static configuration changes. It reloads the dynamic configuration by itself, and files that aren't listed are removed.
+      - The project has an internal network, C(reverse_proxy), that other projects' containers can join to be reached by Traefik.
+    author:
+      - pypb
+    options:
+      docker_traefik_dir:
+        type: path
+        default: /srv/docker/traefik
+        description:
+          - The Compose project's directory.
+          - Its name is the project's name, which prefixes the names of the volumes and of the C(reverse_proxy) network.
+      docker_traefik_group:
+        type: str
+        default: docker
+        description: The group that owns the directory and the configuration, other than C(.env).
+      docker_traefik_image:
+        type: str
+        default: traefik:v3.7
+        description: The Traefik image.
+      docker_traefik_ports:
+        type: list
+        elements: str
+        default: ["80:80", "443:443"]
+        description: Published ports, in Compose's short syntax.
+      docker_traefik_volumes:
+        type: list
+        elements: str
+        default: []
+        description:
+          - More volumes of the container, in Compose's short syntax. Relative paths are relative to O(docker_traefik_dir).
+          - It always has the host's time zone and CAs, the configuration in C(/etc/traefik) and the Docker socket.
+          - It also has the C(data) and C(logs) volumes, in C(/data) and C(/logs).
+      docker_traefik_environment:
+        type: dict
+        default: {}
+        description: Environment variables, written to the Compose file.
+      docker_traefik_secret_environment:
+        type: dict
+        default: {}
+        description: Environment variables for secrets, such as DNS API tokens, written to C(.env), which only root can read.
+      docker_traefik_static_config:
+        type: dict
+        description:
+          - The static configuration, written to C(/etc/traefik/traefik.yml) in the container.
+          - Defaults to the C(web) and C(websecure) entry points on ports 80 and 443, and the Docker provider without exposing containers by default.
+          - The role always sets C(providers.file) to read the dynamic configuration.
+      docker_traefik_static_config_extra:
+        type: dict
+        default: {}
+        description: Merged recursively over O(docker_traefik_static_config), for additions on some hosts.
+      docker_traefik_dynamic_config:
+        type: dict
+        default: {}
+        description:
+          - Files of dynamic configuration, as a dict of file name, ending in C(.yml) or C(.yaml), and content.
+          - They are written to C(/etc/traefik/dynamic) in the container. Files there that aren't listed are removed.

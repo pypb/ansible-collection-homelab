@@ -181,6 +181,17 @@
         - haproxy
       when: site_haproxy | default(false) | bool
 
+    # After Docker, which it runs on.
+    - name: Set up Traefik
+      ansible.builtin.include_role:
+        name: pypb.homelab.docker_traefik
+        apply:
+          tags:
+            - docker_traefik
+      tags:
+        - docker_traefik
+      when: site_docker_traefik | default(false) | bool
+
 # After the services, so that the agent can be given access to Docker.
 - name: Monitoring
   hosts: "{{ site_hosts | default('site') }}"

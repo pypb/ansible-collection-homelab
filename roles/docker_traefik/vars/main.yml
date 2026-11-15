@@ -1,0 +1,10 @@
+---
+# Where the container sees the dynamic configuration. It's a directory of its
+# own, so that the file provider doesn't read the static configuration too.
+__docker_traefik_dynamic_dir: /etc/traefik/dynamic
+
+__docker_traefik_static: >-
+  {{ docker_traefik_static_config
+     | combine(docker_traefik_static_config_extra,
+               {'providers': {'file': {'directory': __docker_traefik_dynamic_dir, 'watch': true}}},
+               recursive=true) }}
