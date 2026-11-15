@@ -1,0 +1,8 @@
+---
+# Only chrony, and nftables on one host, are enabled. The other roles, among them
+# the ones from outside this collection, which the test doesn't install, must be
+# skipped.
+- name: Converge
+  ansible.builtin.import_playbook: pypb.homelab.site
+  vars:
+    site_hosts: targets

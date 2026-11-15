@@ -1,0 +1,17 @@
+---
+# Content from outside this collection that pypb.homelab.site uses:
+#   ansible-galaxy install -r requirements.yml
+# The roles are included when they run, so a role only has to be installed when
+# a host enables it. community.zabbix is always needed, since the playbook calls
+# its zabbix_host module directly.
+roles:
+  # site_sshd
+  - name: willshersystems.sshd
+  # site_docker
+  - name: geerlingguy.docker
+
+collections:
+  # site_zabbix_agent and site_zabbix_host
+  - name: community.zabbix
+  # site_alloy
+  - name: grafana.grafana

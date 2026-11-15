@@ -1,0 +1,6 @@
+---
+minor_changes:
+  - site - new playbook that configures servers in phases, access, base, firewall,
+    services, monitoring and backup, with a tag for each phase and each role. A role
+    runs on a host only where its site_<role> variable is true. The roles and
+    collections it uses from outside this collection are listed in requirements.yml.
