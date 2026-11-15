@@ -1,0 +1,151 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - wireguard_interface is match('^[A-Za-z0-9_=+.-]{1,15}$')
+      - wireguard_addresses | length > 0
+      - wireguard_addresses | reject('search', '^[0-9A-Fa-f.:]+/[0-9]+$') | length == 0
+      - wireguard_peers | rejectattr('public_key', 'defined') | length == 0
+      - wireguard_peers | rejectattr('allowed_ips', 'defined') | length == 0
+      - wireguard_mesh_peers | rejectattr('host', 'defined') | length == 0
+      - __wireguard_mesh_peers | map(attribute='host') | reject('in', hostvars) | length == 0
+      - >-
+        wireguard_opnsense | length == 0 or
+        ['host', 'api_key', 'api_secret', 'instance'] | reject('in', wireguard_opnsense) | length == 0
+    fail_msg: >-
+      wireguard_addresses needs at least one address with its prefix length, every
+      peer a public_key and allowed_ips, every mesh peer the host of an inventory
+      host, and wireguard_opnsense a host, api_key, api_secret and instance.
+    quiet: true
+
+# procps has sysctl, for forwarding.
+- name: Install WireGuard's tools
+  ansible.builtin.apt:
+    name: "{{ ['wireguard-tools'] + (['procps'] if wireguard_ip_forward | bool else []) }}"
+    update_cache: true
+    cache_valid_time: 3600
+  register: __wireguard_install
+
+- name: Create the configuration directory
+  ansible.builtin.file:
+    path: "{{ __wireguard_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# A key that already exists is kept, so that peers keep trusting this host.
+- name: Generate the key pair
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail && umask 077 &&
+      wg genkey | tee {{ __wireguard_private_key }} | wg pubkey > {{ __wireguard_public_key }}
+    executable: /bin/bash
+    creates: "{{ __wireguard_private_key }}"
+  register: __wireguard_keygen
+
+# A peer without a key yet is left out until it has one.
+- name: Read the public keys of the mesh peers
+  ansible.builtin.slurp:
+    src: "{{ __wireguard_public_key }}"
+  delegate_to: "{{ item['host'] }}"
+  loop: "{{ __wireguard_mesh_peers }}"
+  loop_control:
+    label: "{{ item['host'] }}"
+  register: __wireguard_mesh_keys
+  failed_when: false
+
+- name: Report mesh peers without a key
+  ansible.builtin.debug:
+    msg: >-
+      {{ __wireguard_mesh_keys['results'] | rejectattr('content', 'defined')
+         | map(attribute='item') | map(attribute='host') | join(', ') }}
+      have no WireGuard key yet, so they are left out. Run the role on them, then
+      again here.
+  when: __wireguard_mesh_keys['results'] | rejectattr('content', 'defined') | length > 0
+
+- name: Write the configuration
+  ansible.builtin.template:
+    src: wireguard.conf.j2
+    dest: "{{ __wireguard_dir }}/{{ wireguard_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  register: __wireguard_config
+
+- name: Forward packets
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-wireguard.conf
+  loop: >-
+    {{ ['net.ipv4.ip_forward']
+       + (['net.ipv6.conf.all.forwarding'] if wireguard_addresses | select('search', ':') | list | length > 0 else []) }}
+  when:
+    - wireguard_ip_forward | bool
+    # In check mode, sysctl may not be installed yet.
+    - not (ansible_check_mode and __wireguard_install is changed)
+
+- name: Bring up the interface at boot
+  ansible.builtin.systemd_service:
+    name: "{{ __wireguard_service }}"
+    enabled: true
+    state: started
+  register: __wireguard_started
+  # In check mode, the tools may not be installed yet.
+  when: not (ansible_check_mode and __wireguard_install is changed)
+
+- name: Read the addresses of the interface
+  ansible.builtin.command:
+    argv: [ip, -json, address, show, dev, "{{ wireguard_interface }}"]
+  register: __wireguard_running_addresses
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the allowed IPs of the interface
+  ansible.builtin.command:
+    argv: [wg, show, "{{ wireguard_interface }}", allowed-ips]
+  register: __wireguard_running_allowed_ips
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# wg-quick sets the addresses, and the routes to the allowed IPs, when it
+# brings up the interface. A reload leaves them as they were, so changing them
+# takes a restart.
+- name: Apply new addresses or allowed IPs
+  ansible.builtin.systemd_service:
+    name: "{{ __wireguard_service }}"
+    state: restarted
+  register: __wireguard_restarted
+  when:
+    - __wireguard_running_addresses['rc'] == 0
+    - __wireguard_running_allowed_ips['rc'] == 0
+    - >-
+      __wireguard_addresses_now | sort != wireguard_addresses | map('lower') | sort
+      or __wireguard_allowed_ips_now | unique | sort != __wireguard_allowed_ips | unique | sort
+  vars:
+    __wireguard_addr_info: "{{ (__wireguard_running_addresses['stdout'] | from_json | first)['addr_info'] }}"
+    __wireguard_addresses_now: >-
+      {{ __wireguard_addr_info | map(attribute='local')
+         | zip(__wireguard_addr_info | map(attribute='prefixlen')) | map('join', '/') | list }}
+    # Lines of a public key, which ends in =, and its allowed IPs
+    __wireguard_allowed_ips_now: >-
+      {{ __wireguard_running_allowed_ips['stdout'].split() | reject('search', '=$')
+         | reject('eq', '(none)') | list }}
+
+# A reload updates the peers and port without dropping their sessions.
+- name: Apply the new peers
+  ansible.builtin.systemd_service:
+    name: "{{ __wireguard_service }}"
+    state: reloaded
+  when:
+    - __wireguard_config is changed
+    - __wireguard_started is not changed
+    - __wireguard_started is not skipped
+    - __wireguard_restarted is skipped
+
+- name: Register this host on OPNsense
+  ansible.builtin.include_tasks: opnsense.yml
+  when: wireguard_opnsense | length > 0

@@ -39,6 +39,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.users`](roles/users/README.md) | Local groups and accounts with their SSH keys, including the account Ansible uses, and deletes an image's default accounts | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.nftables`](roles/nftables/README.md) | A host firewall that drops input its rules don't accept, replacing only its own table | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.fail2ban`](roles/fail2ban/README.md) | Bans hosts that fail to log in, with jails, defaults and action settings in fail2ban's `.local` files, banning through nftables | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.wireguard`](roles/wireguard/README.md) | A WireGuard interface with wg-quick, with listed peers, a mesh of inventory hosts and optional registration as a peer on OPNsense | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
@@ -109,6 +110,7 @@ molecule test --scenario-name chrony
 molecule test --scenario-name users
 molecule test --scenario-name nftables
 molecule test --scenario-name fail2ban
+molecule test --scenario-name wireguard
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and

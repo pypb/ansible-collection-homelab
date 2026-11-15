@@ -1,0 +1,123 @@
+---
+# The responses hold the firewall's private keys, hence no_log.
+- name: Read the address the firewall connects to
+  ansible.builtin.setup:
+    gather_subset: [network]
+    filter: [ansible_default_ipv4]
+  when: wireguard_opnsense['endpoint'] is not defined
+
+- name: Read the public key
+  ansible.builtin.slurp:
+    src: "{{ __wireguard_public_key }}"
+  register: __wireguard_own_key
+  # In check mode, the key may not exist yet.
+  when: not (ansible_check_mode and __wireguard_keygen is changed)
+
+- name: Read the WireGuard instances and peers of the firewall
+  ansible.builtin.uri:
+    url: "{{ __wireguard_opnsense_url }}/{{ item }}/get"
+    user: "{{ wireguard_opnsense['api_key'] }}"
+    password: "{{ wireguard_opnsense['api_secret'] }}"
+    force_basic_auth: true
+    validate_certs: "{{ wireguard_opnsense['validate_certs'] | default(true) }}"
+  loop: [server, client]
+  register: __wireguard_opnsense_get
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  no_log: true
+  when: __wireguard_own_key is not skipped
+
+- name: Compare the peer with this host
+  ansible.builtin.set_fact:
+    __wireguard_opnsense_instance: >-
+      {{ __wireguard_instances | selectattr('value.name', 'eq', wireguard_opnsense['instance'])
+         | map(attribute='key') | first | default('') }}
+    __wireguard_opnsense_current:
+      uuid: "{{ __wireguard_peer['key'] | default('') }}"
+      enabled: "{{ __wireguard_peer_value['enabled'] | default('') }}"
+      name: "{{ __wireguard_peer_value['name'] | default('') }}"
+      pubkey: "{{ __wireguard_peer_value['pubkey'] | default('') }}"
+      tunneladdress: >-
+        {{ __wireguard_peer_value['tunneladdress'] | default({}) | dict2items
+           | selectattr('value.selected', 'eq', 1) | map(attribute='key') | sort | join(',') }}
+      serveraddress: "{{ __wireguard_peer_value['serveraddress'] | default('') }}"
+      serverport: "{{ __wireguard_peer_value['serverport'] | default('') }}"
+      keepalive: "{{ __wireguard_peer_value['keepalive'] | default('') }}"
+      servers: >-
+        {{ __wireguard_peer_value['servers'] | default({}) | dict2items
+           | selectattr('value.selected', 'eq', 1) | map(attribute='key') | sort | join(',') }}
+  vars:
+    __wireguard_instances: "{{ __wireguard_opnsense_get['results'][0]['json']['server']['servers']['server'] | dict2items }}"
+    __wireguard_peers: "{{ __wireguard_opnsense_get['results'][1]['json']['client']['clients']['client'] | dict2items }}"
+    __wireguard_pubkey: "{{ __wireguard_own_key['content'] | b64decode | trim }}"
+    # The same key first, then the same name, so a new key replaces the old one.
+    __wireguard_peer: >-
+      {{ (__wireguard_peers | selectattr('value.pubkey', 'eq', __wireguard_pubkey) | list
+          + __wireguard_peers | selectattr('value.name', 'eq', __wireguard_opnsense_name) | list)
+         | first | default({}) }}
+    __wireguard_peer_value: "{{ __wireguard_peer['value'] | default({}) }}"
+  when: __wireguard_own_key is not skipped
+
+- name: Check that the instance exists
+  ansible.builtin.assert:
+    that: __wireguard_opnsense_instance | length > 0
+    fail_msg: "The firewall has no WireGuard instance called {{ wireguard_opnsense['instance'] }}."
+    quiet: true
+  when: __wireguard_own_key is not skipped
+
+- name: Set the wanted peer
+  ansible.builtin.set_fact:
+    __wireguard_opnsense_wanted:
+      enabled: "1"
+      name: "{{ __wireguard_opnsense_name }}"
+      pubkey: "{{ __wireguard_own_key['content'] | b64decode | trim }}"
+      tunneladdress: >-
+        {{ wireguard_addresses | map('regex_replace', '/.*$', '') | map('regex_replace', '^([^:]*)$', '\1/32')
+           | map('regex_replace', '^(.*:.*)$', '\1/128') | map('lower') | sort | join(',') }}
+      serveraddress: "{{ wireguard_opnsense['endpoint'] | default(ansible_facts['default_ipv4']['address']) }}"
+      serverport: "{{ wireguard_port | string }}"
+      keepalive: "{{ (__wireguard_keepalive | int > 0) | ternary(__wireguard_keepalive | string, '') }}"
+      servers: "{{ __wireguard_opnsense_instance }}"
+  vars:
+    __wireguard_keepalive: "{{ wireguard_opnsense['keepalive'] | default(25) }}"
+  when: __wireguard_own_key is not skipped
+
+- name: Report the changes to the peer
+  ansible.builtin.debug:
+    msg:
+      before: "{{ __wireguard_opnsense_current | dict2items | rejectattr('key', 'eq', 'uuid') | items2dict }}"
+      after: "{{ __wireguard_opnsense_wanted }}"
+  changed_when: true
+  when:
+    - __wireguard_own_key is not skipped
+    - __wireguard_opnsense_changed
+  vars: &changed
+    __wireguard_opnsense_changed: >-
+      {{ __wireguard_opnsense_current | dict2items | rejectattr('key', 'eq', 'uuid') | items2dict
+         != __wireguard_opnsense_wanted }}
+
+- name: Add or update the peer
+  ansible.builtin.uri:
+    url: >-
+      {{ __wireguard_opnsense_url }}/client/{{ ('setClient/' ~ __wireguard_opnsense_current['uuid'])
+         if __wireguard_opnsense_current['uuid'] | default('') | length > 0 else 'addClient' }}
+    method: POST
+    user: "{{ wireguard_opnsense['api_key'] }}"
+    password: "{{ wireguard_opnsense['api_secret'] }}"
+    force_basic_auth: true
+    validate_certs: "{{ wireguard_opnsense['validate_certs'] | default(true) }}"
+    body_format: json
+    body:
+      client: "{{ __wireguard_opnsense_wanted }}"
+  register: __wireguard_opnsense_saved
+  changed_when: true
+  failed_when: __wireguard_opnsense_saved['json']['result'] | default('') != 'saved'
+  delegate_to: localhost
+  become: false
+  when:
+    - __wireguard_own_key is not skipped
+    - __wireguard_opnsense_changed
+    - not ansible_check_mode
+  vars: *changed
+  notify: Apply the WireGuard peers on OPNsense

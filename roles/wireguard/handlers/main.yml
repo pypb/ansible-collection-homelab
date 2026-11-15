@@ -1,0 +1,15 @@
+---
+- name: Apply the WireGuard peers on OPNsense
+  ansible.builtin.uri:
+    url: "{{ __wireguard_opnsense_url }}/service/reconfigure"
+    method: POST
+    user: "{{ wireguard_opnsense['api_key'] }}"
+    password: "{{ wireguard_opnsense['api_secret'] }}"
+    force_basic_auth: true
+    validate_certs: "{{ wireguard_opnsense['validate_certs'] | default(true) }}"
+    body_format: json
+    body: {}
+  changed_when: true
+  delegate_to: localhost
+  become: false
+  run_once: true

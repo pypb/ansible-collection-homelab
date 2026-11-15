@@ -1,0 +1,20 @@
+---
+- name: Prepare hosts for WireGuard
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # The interfaces and routes must not reach this machine's own network.
+    - name: Read the container's network namespace
+      ansible.builtin.command:
+        argv: [readlink, /proc/1/ns/net]
+      register: __molecule_netns
+      changed_when: false
+
+    - name: Check the container has its own network namespace
+      ansible.builtin.assert:
+        that: __molecule_netns['stdout'] != lookup('ansible.builtin.pipe', 'readlink /proc/self/ns/net')
+
+    - name: Install ip and ping
+      ansible.builtin.apt:
+        name: [iproute2, iputils-ping]
+        update_cache: true

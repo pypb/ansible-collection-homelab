@@ -60,6 +60,7 @@ jobs:
           - users
           - nftables
           - fail2ban
+          - wireguard
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

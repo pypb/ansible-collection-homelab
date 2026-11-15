@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+[Interface]
+Address = {{ wireguard_addresses | join(', ') }}
+ListenPort = {{ wireguard_port }}
+# The private key stays in its own file.
+PostUp = wg set %i private-key {{ __wireguard_private_key }}
+{% for peer in wireguard_peers %}
+
+{% if peer['name'] is defined %}
+# {{ peer['name'] }}
+{% endif %}
+[Peer]
+PublicKey = {{ peer['public_key'] }}
+AllowedIPs = {{ peer['allowed_ips'] | join(', ') }}
+{% if peer['endpoint'] is defined %}
+Endpoint = {{ peer['endpoint'] }}
+{% endif %}
+{% if peer['persistent_keepalive'] | default(0) | int > 0 %}
+PersistentKeepalive = {{ peer['persistent_keepalive'] }}
+{% endif %}
+{% endfor %}
+{% for key in __wireguard_mesh_keys['results'] | selectattr('content', 'defined') %}
+{%   set peer = hostvars[key['item']['host']] %}
+
+# {{ key['item']['host'] }}
+[Peer]
+PublicKey = {{ key['content'] | b64decode | trim }}
+AllowedIPs = {{ peer['wireguard_addresses'] | map('regex_replace', '/.*$', '') | map('regex_replace', '^([^:]*)$', '\\1/32') | map('regex_replace', '^(.*:.*)$', '\\1/128') | join(', ') }}
+Endpoint = {{ key['item']['endpoint'] | default(peer['wireguard_mesh_endpoint'] | default(key['item']['host'])) | ansible.builtin.regex_replace('^(.*:.*)$', '[\\1]') }}:{{ peer['wireguard_port'] | default(wireguard_port) }}
+{% if wireguard_mesh_persistent_keepalive | int > 0 %}
+PersistentKeepalive = {{ wireguard_mesh_persistent_keepalive }}
+{% endif %}
+{% endfor %}

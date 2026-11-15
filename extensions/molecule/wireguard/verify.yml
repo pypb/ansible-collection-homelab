@@ -1,0 +1,184 @@
+---
+- name: Verify the mesh
+  hosts: targets
+  gather_facts: false
+  vars:
+    __molecule_peers: "{{ groups['targets'] | reject('eq', inventory_hostname) }}"
+  tasks:
+    - name: Read the configuration
+      ansible.builtin.slurp:
+        src: /etc/wireguard/wg0.conf
+      register: __molecule_config
+
+    - name: Check the private key isn't in the configuration
+      ansible.builtin.assert:
+        that:
+          - __molecule_config['content'] | b64decode is not search('PrivateKey')
+          - __molecule_config['content'] | b64decode is search('PostUp = wg set %i private-key /etc/wireguard/privatekey')
+
+    - name: Read the interface
+      ansible.builtin.command:
+        argv: [wg, show, wg0, dump]
+      register: __molecule_wg
+      changed_when: false
+
+    - name: Read the public key
+      ansible.builtin.slurp:
+        src: /etc/wireguard/publickey
+      register: __molecule_pubkey
+
+    - name: Check the interface has its key, port and every peer
+      ansible.builtin.assert:
+        that:
+          - __molecule_interface[1] == __molecule_pubkey['content'] | b64decode | trim
+          - __molecule_interface[2] == '51337'
+          # The gateway and the two other mesh peers
+          - __molecule_wg['stdout_lines'] | length == 4
+          - __molecule_wg['stdout'] is search('0n3T38Qa1thLIMEVDGeNK8yD76u6Gp/Ugcuz9ldRvlE=\t\(none\)\t\(none\)\t10.99.0.254/32,192.0.2.0/24')
+      vars:
+        __molecule_interface: "{{ __molecule_wg['stdout_lines'][0].split('\t') }}"
+
+    - name: Ping the other mesh peers through the tunnel
+      ansible.builtin.command:
+        argv: [ping, -c, "1", -W, "5", "{{ hostvars[item]['wireguard_addresses'][0] | regex_replace('/.*$', '') }}"]
+      loop: "{{ __molecule_peers }}"
+      changed_when: false
+
+    - name: Read whether the interface comes up at boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, wg-quick@wg0]
+      changed_when: false
+
+    - name: Read the forwarding setting
+      ansible.builtin.command:
+        argv: [sysctl, -n, net.ipv4.ip_forward]
+      register: __molecule_forward
+      changed_when: false
+
+    - name: Check packets are forwarded
+      ansible.builtin.assert:
+        that: __molecule_forward['stdout'] == '1'
+
+- name: Verify a change of peers and of address
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the container's address
+      ansible.builtin.setup:
+        gather_subset: [network]
+        filter: [ansible_default_ipv4]
+
+    - name: Read the handshake times before the change
+      ansible.builtin.command:
+        argv: [wg, show, wg0, latest-handshakes]
+      register: __molecule_before
+      changed_when: false
+
+    - name: Add a peer and an address
+      ansible.builtin.include_role:
+        name: pypb.homelab.wireguard
+      vars:
+        wireguard_addresses:
+          - "{{ hostvars[inventory_hostname]['wireguard_addresses'][0] }}"
+          - fd99::{{ groups['targets'].index(inventory_hostname) + 1 }}/64
+        wireguard_peers:
+          - public_key: 0n3T38Qa1thLIMEVDGeNK8yD76u6Gp/Ugcuz9ldRvlE=
+            allowed_ips: [10.99.0.254/32]
+          - public_key: J6ReDyL1Bw2NbwjMXOzldA+NkdTGTfGYPCbJDvmGY0U=
+            allowed_ips: [10.99.1.0/24]
+            endpoint: 192.0.2.1:51820
+            persistent_keepalive: 25
+        wireguard_mesh_peers: "{{ groups['targets'] | map('community.general.dict_kv', 'host') }}"
+
+    - name: Read the interface after the change
+      ansible.builtin.command:
+        argv: [wg, show, wg0, dump]
+      register: __molecule_after
+      changed_when: false
+
+    - name: Read the addresses after the change
+      ansible.builtin.command:
+        argv: [ip, -brief, address, show, dev, wg0]
+      register: __molecule_addresses
+      changed_when: false
+
+    - name: Read the routes after the change
+      ansible.builtin.command:
+        argv: [ip, route, show, dev, wg0]
+      register: __molecule_routes
+      changed_when: false
+
+    - name: Check the new peer, address and routes are applied, and the key kept
+      ansible.builtin.assert:
+        that:
+          - __molecule_routes['stdout'] is search('10.99.1.0/24')
+          - __molecule_routes['stdout'] is not search('192.0.2.0/24')
+          - __molecule_after['stdout'] is search(__molecule_new_peer | join('\t'))
+          - __molecule_after['stdout_lines'][0].split('\t')[0] != '(none)'
+          - __molecule_addresses['stdout'] is search('fd99::')
+      vars:
+        # Key, preshared key, endpoint, allowed IPs, handshake, received, sent, keepalive
+        __molecule_new_peer:
+          - J6ReDyL1Bw2NbwjMXOzldA\+NkdTGTfGYPCbJDvmGY0U=
+          - \(none\)
+          - 192.0.2.1:51820
+          - 10.99.1.0/24
+          - '[0-9]+'
+          - '[0-9]+'
+          - '[0-9]+'
+          - '25'
+
+    - name: Ping the other mesh peers after the change
+      ansible.builtin.command:
+        argv: [ping, -c, "1", -W, "5", "{{ hostvars[item]['wireguard_addresses'][0] | regex_replace('/.*$', '') }}"]
+      loop: "{{ groups['targets'] | reject('eq', inventory_hostname) }}"
+      changed_when: false
+
+- name: Verify a change of endpoint only reloads
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the container's address
+      ansible.builtin.setup:
+        gather_subset: [network]
+        filter: [ansible_default_ipv4]
+
+    - name: Read when the interface came up
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=ActiveEnterTimestampMonotonic, wg-quick@wg0]
+      register: __molecule_up_before
+      changed_when: false
+
+    - name: Change the endpoint of a peer
+      ansible.builtin.include_role:
+        name: pypb.homelab.wireguard
+      vars:
+        wireguard_addresses:
+          - "{{ hostvars[inventory_hostname]['wireguard_addresses'][0] }}"
+          - fd99::{{ groups['targets'].index(inventory_hostname) + 1 }}/64
+        wireguard_peers:
+          - public_key: 0n3T38Qa1thLIMEVDGeNK8yD76u6Gp/Ugcuz9ldRvlE=
+            allowed_ips: [10.99.0.254/32]
+          - public_key: J6ReDyL1Bw2NbwjMXOzldA+NkdTGTfGYPCbJDvmGY0U=
+            allowed_ips: [10.99.1.0/24]
+            endpoint: 192.0.2.2:51820
+            persistent_keepalive: 25
+        wireguard_mesh_peers: "{{ groups['targets'] | map('community.general.dict_kv', 'host') }}"
+
+    - name: Read when the interface came up, after the change
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=ActiveEnterTimestampMonotonic, wg-quick@wg0]
+      register: __molecule_up_after
+      changed_when: false
+
+    - name: Read the interface after the reload
+      ansible.builtin.command:
+        argv: [wg, show, wg0, endpoints]
+      register: __molecule_endpoints
+      changed_when: false
+
+    - name: Check the endpoint changed without a restart
+      ansible.builtin.assert:
+        that:
+          - __molecule_up_after['stdout'] == __molecule_up_before['stdout']
+          - __molecule_endpoints['stdout'] is search('192.0.2.2:51820')

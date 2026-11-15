@@ -1,0 +1,48 @@
+---
+# Name of the interface. The configuration is /etc/wireguard/<interface>.conf,
+# brought up by wg-quick@<interface>.
+wireguard_interface: wg0
+
+# wireguard_addresses is required: the addresses of the interface, with their
+# prefix length, such as [10.0.0.2/24].
+
+# UDP port to listen on.
+wireguard_port: 51820
+
+# Peers that aren't hosts of the inventory, such as a gateway. Each takes
+#   name: a comment in the configuration
+#   public_key: required
+#   allowed_ips: required list of addresses and networks routed to the peer
+#   endpoint: host:port to connect to. Leave it out for a peer that connects
+#     to this host, such as one behind a dynamic address
+#   persistent_keepalive: seconds between keepalives, or 0 for none
+wireguard_peers: []
+
+# Hosts of the inventory to mesh with. Each takes
+#   host: the inventory hostname, which runs this role too
+#   endpoint: address or hostname to reach it on. Defaults to the host's
+#     wireguard_mesh_endpoint, then to its inventory hostname
+# Each peer's public key is read from the peer, and its wireguard_addresses
+# are routed to it. This host itself is skipped, so the same list can serve a
+# whole group.
+wireguard_mesh_peers: []
+
+# Seconds between keepalives to mesh peers, or 0 for none.
+wireguard_mesh_persistent_keepalive: 0
+
+# Forward packets between interfaces, to route between the tunnel and other
+# networks.
+wireguard_ip_forward: false
+
+# Registers this host as a peer of a WireGuard instance on an OPNsense
+# firewall, through its API. Empty to skip. Takes
+#   host: required address or hostname of the firewall
+#   api_key, api_secret: required API credentials
+#   instance: required name of the WireGuard instance
+#   name: name of the peer. Defaults to the short inventory hostname
+#   endpoint: address the firewall connects to. Defaults to the address of the
+#     default IPv4 route
+#   keepalive: seconds between keepalives from the firewall, or 0 for none.
+#     Defaults to 25
+#   validate_certs: defaults to true
+wireguard_opnsense: {}

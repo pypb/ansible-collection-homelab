@@ -1,0 +1,13 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - wireguard-debian13
+        - wireguard-ubuntu2404
+        - wireguard-ubuntu2604

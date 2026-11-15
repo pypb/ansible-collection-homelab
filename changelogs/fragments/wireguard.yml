@@ -1,0 +1,7 @@
+---
+minor_changes:
+  - wireguard - new role for a WireGuard interface with wg-quick. It generates the
+    key pair on the host, keeping the private key out of the configuration, and
+    sets up listed peers and a mesh of inventory hosts. Changes of peers are
+    applied with a reload that keeps the other sessions. Optionally registers the
+    host as a peer on OPNsense through its API, only updating it when it differs.
