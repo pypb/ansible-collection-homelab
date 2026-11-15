@@ -1,0 +1,33 @@
+---
+- name: Verify site
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the chronyd options
+      ansible.builtin.command:
+        argv: [grep, '^DAEMON_OPTS=', /etc/default/chrony]
+      register: __molecule_opts
+      changed_when: false
+
+    - name: Read the nftables ruleset
+      ansible.builtin.command:
+        argv: [nft, list, tables]
+      register: __molecule_tables
+      changed_when: false
+      failed_when: false
+
+    - name: Look for the packages of roles that are off
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, -f, '${db:Status-Status}', "{{ item }}"]
+      loop: [msmtp, haproxy, fail2ban, wireguard-tools]
+      register: __molecule_packages
+      changed_when: false
+      failed_when: false
+
+    - name: Check that only the enabled roles ran
+      ansible.builtin.assert:
+        that:
+          - __molecule_opts['stdout'] == 'DAEMON_OPTS="-F 1 -x"'
+          - ('table inet filter' in __molecule_tables['stdout']) == (inventory_hostname == 'site-debian13')
+          - __molecule_packages['results'] | selectattr('stdout', 'eq', 'installed') | list | length == 0
+        fail_msg: "{{ __molecule_tables['stdout'] }}"

@@ -1,0 +1,261 @@
+---
+# Configures servers in one run, one phase at a time. A role runs on a host only
+# when its site_<role> variable is true there; all of them default to false.
+#
+# Each phase is a play tagged with the phase's name, and each role is tagged with
+# its own name, so either can be picked with --tags. The roles are included rather
+# than imported, so a role that comes from outside this collection only has to be
+# installed when it's enabled somewhere. See the README for the list.
+
+- name: Access
+  hosts: "{{ site_hosts | default('site') }}"
+  become: true
+  tags:
+    - access
+  tasks:
+    # First, so that the account Ansible uses and its keys exist before sshd
+    # limits who can log in.
+    - name: Set up the local accounts
+      ansible.builtin.include_role:
+        name: pypb.homelab.users
+        apply:
+          tags:
+            - users
+      tags:
+        - users
+      when: site_users | default(false) | bool
+
+    - name: Set up sshd
+      ansible.builtin.include_role:
+        name: willshersystems.sshd
+        apply:
+          tags:
+            - sshd
+      tags:
+        - sshd
+      when: site_sshd | default(false) | bool
+
+- name: Base
+  hosts: "{{ site_hosts | default('site') }}"
+  become: true
+  gather_facts: false
+  tags:
+    - base
+  tasks:
+    - name: Set up the server baseline
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_baseline
+        apply:
+          tags:
+            - server_baseline
+      tags:
+        - server_baseline
+      when: site_server_baseline | default(false) | bool
+
+    - name: Set up chrony
+      ansible.builtin.include_role:
+        name: pypb.homelab.chrony
+        apply:
+          tags:
+            - chrony
+      tags:
+        - chrony
+      when: site_chrony | default(false) | bool
+
+    - name: Set up swap
+      ansible.builtin.include_role:
+        name: pypb.homelab.swap
+        apply:
+          tags:
+            - swap
+      tags:
+        - swap
+      when: site_swap | default(false) | bool
+
+    - name: Set up the SMTP client
+      ansible.builtin.include_role:
+        name: pypb.homelab.smtp_client
+        apply:
+          tags:
+            - smtp_client
+      tags:
+        - smtp_client
+      when: site_smtp_client | default(false) | bool
+
+    - name: Set up unattended upgrades
+      ansible.builtin.include_role:
+        name: pypb.homelab.unattended_upgrades
+        apply:
+          tags:
+            - unattended_upgrades
+      tags:
+        - unattended_upgrades
+      when: site_unattended_upgrades | default(false) | bool
+
+    # Before the services and the monitoring agent, which use the certificates.
+    - name: Set up the certificates
+      ansible.builtin.include_role:
+        name: pypb.homelab.acme_certificates
+        apply:
+          tags:
+            - acme_certificates
+      tags:
+        - acme_certificates
+      when: site_acme_certificates | default(false) | bool
+
+# Before the services, so that their ports are only open where the firewall
+# allows it.
+- name: Firewall
+  hosts: "{{ site_hosts | default('site') }}"
+  become: true
+  gather_facts: false
+  tags:
+    - firewall
+  tasks:
+    # Before nftables, whose rules can refer to the WireGuard interface.
+    - name: Set up WireGuard
+      ansible.builtin.include_role:
+        name: pypb.homelab.wireguard
+        apply:
+          tags:
+            - wireguard
+      tags:
+        - wireguard
+      when: site_wireguard | default(false) | bool
+
+    - name: Set up nftables
+      ansible.builtin.include_role:
+        name: pypb.homelab.nftables
+        apply:
+          tags:
+            - nftables
+      tags:
+        - nftables
+      when: site_nftables | default(false) | bool
+
+    # After nftables, which it bans through.
+    - name: Set up fail2ban
+      ansible.builtin.include_role:
+        name: pypb.homelab.fail2ban
+        apply:
+          tags:
+            - fail2ban
+      tags:
+        - fail2ban
+      when: site_fail2ban | default(false) | bool
+
+    - name: Harden the server
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_hardening
+        apply:
+          tags:
+            - server_hardening
+      tags:
+        - server_hardening
+      when: site_server_hardening | default(false) | bool
+
+- name: Services
+  hosts: "{{ site_hosts | default('site') }}"
+  become: true
+  gather_facts: false
+  tags:
+    - services
+  tasks:
+    - name: Set up Docker
+      ansible.builtin.include_role:
+        name: geerlingguy.docker
+        apply:
+          tags:
+            - docker
+      tags:
+        - docker
+      when: site_docker | default(false) | bool
+
+    - name: Set up HAProxy
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy
+        apply:
+          tags:
+            - haproxy
+      tags:
+        - haproxy
+      when: site_haproxy | default(false) | bool
+
+# After the services, so that the agent can be given access to Docker.
+- name: Monitoring
+  hosts: "{{ site_hosts | default('site') }}"
+  become: true
+  gather_facts: false
+  tags:
+    - monitoring
+  tasks:
+    - name: Set up the Zabbix agent
+      when: site_zabbix_agent | default(false) | bool
+      tags:
+        - zabbix_agent
+      block:
+        - name: Install the Zabbix agent
+          ansible.builtin.include_role:
+            name: community.zabbix.zabbix_agent
+            apply:
+              tags:
+                - zabbix_agent
+
+        # So that the agent can check the certificates' expiry.
+        - name: Let the Zabbix agent read the private certificates
+          ansible.builtin.user:
+            name: zabbix
+            groups:
+              - ssl-cert
+            append: true
+
+        - name: Let the Zabbix agent query Docker
+          ansible.builtin.user:
+            name: zabbix
+            groups:
+              - docker
+            append: true
+          when: site_docker | default(false) | bool
+
+    - name: Register the host in Zabbix
+      community.zabbix.zabbix_host:
+        description: "{{ zabbix_host_config_description | default(omit) }}"
+        host_name: "{{ inventory_hostname }}"
+        visible_name: "{{ inventory_hostname_short }}"
+        host_groups: "{{ zabbix_host_config_groups }}"
+        link_templates: "{{ zabbix_host_config_link_templates }}"
+        interfaces:
+          - type: agent
+            main: 1
+            useip: 0
+            dns: "{{ zabbix_host_config_interface_dns }}"
+            port: "10050"
+        # 4: certificate
+        tls_accept: 4
+        tls_connect: 4
+      # delegate_to is templated before when, so it needs a value on the hosts
+      # that skip this.
+      delegate_to: "{{ zabbix_host_config_api_host | default(inventory_hostname) }}"
+      tags:
+        - zabbix_host
+      when: site_zabbix_host | default(false) | bool
+
+    - name: Set up Grafana Alloy
+      ansible.builtin.include_role:
+        name: grafana.grafana.alloy
+        apply:
+          tags:
+            - alloy
+      tags:
+        - alloy
+      when: site_alloy | default(false) | bool
+
+# restic_backup_enable still decides on each host whether a backup is set up.
+- name: Backup
+  ansible.builtin.import_playbook: pypb.homelab.restic_backup
+  vars:
+    restic_backup_hosts: "{{ site_hosts | default('site') }}"
+  tags:
+    - backup
+    - restic_backup
+  when: site_restic_backup | default(false) | bool

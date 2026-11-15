@@ -33,6 +33,10 @@ migrated into `roles/`.
   - `haproxy`: HAProxy with frontends, backends and listen sections, checked before
     they are loaded
 - Playbooks:
+  - `site`: configures servers in phases (access, base, firewall, services,
+    monitoring, backup), running each role where its `site_<role>` variable is
+    true, with a tag per phase and per role. External content it uses is listed
+    in `requirements.yml`
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and
     `ocfs2`, one node at a time
@@ -49,7 +53,8 @@ added.
 - Sanity tests: `ansible-test sanity --docker default`
 - Molecule: run `molecule test --scenario-name <name>` from `extensions/`, with
   `ANSIBLE_COLLECTIONS_PATH` covering this collection, `ansible.posix`,
-  `community.docker`, `community.crypto` and `community.general`.
+  `community.docker`, `community.crypto` and `community.general`, and for the
+  `site` scenario `community.zabbix`.
   With Podman, also start the API socket and set `DOCKER_HOST`
 - Changelog: add a fragment to `changelogs/fragments/`, then run
   `antsibull-changelog release` when releasing

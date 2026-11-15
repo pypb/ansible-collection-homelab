@@ -62,6 +62,7 @@ jobs:
           - fail2ban
           - wireguard
           - haproxy
+          - site
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:
@@ -72,7 +73,7 @@ jobs:
         with:
           python-version: "3.14"
       - run: pip install ansible-core molecule requests
-      - run: ansible-galaxy collection install ansible.posix community.docker community.crypto community.general
+      - run: ansible-galaxy collection install ansible.posix community.docker community.crypto community.general community.zabbix
       - run: molecule test --scenario-name ${{ matrix.scenario }}
         working-directory: ansible_collections/pypb/homelab/extensions
 

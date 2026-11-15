@@ -10,6 +10,9 @@ Ansible roles and plugins for managing my homelab.
   5.0.0 or newer, [`community.crypto`](https://docs.ansible.com/ansible/latest/collections/community/crypto/)
   3.1.1 or newer and [`community.general`](https://docs.ansible.com/ansible/latest/collections/community/general/)
   9.0.0 or newer, which are installed automatically with this collection
+- For the `site` playbook, the roles and collections in
+  [`requirements.yml`](requirements.yml), which aren't installed automatically:
+  `ansible-galaxy install -r requirements.yml`
 
 ## Installation
 
@@ -44,6 +47,55 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 
 ### Playbooks
+
+| Playbook | Description |
+|---|---|
+| [`pypb.homelab.site`](playbooks/site.yml) | Configures servers in one run, in phases: access, base, firewall, services, monitoring and backup. A role only runs on hosts where its `site_<role>` variable is true |
+
+```shell
+ansible-playbook pypb.homelab.site
+ansible-playbook pypb.homelab.site --tags monitoring --limit host1
+ansible-playbook pypb.homelab.site --tags users -u bootstrap --limit newhost
+ansible-playbook pypb.homelab.site --list-tags
+```
+
+The playbook targets the hosts in `site_hosts`, which defaults to the `site` group.
+Each phase is tagged with its name, and each role with the name in the table.
+The phases run in this order, and the roles within a phase in the order shown:
+
+| Phase | Tag | Role | Enabled by |
+|---|---|---|---|
+| access | `users` | `pypb.homelab.users` | `site_users` |
+| access | `sshd` | `willshersystems.sshd` | `site_sshd` |
+| base | `server_baseline` | `pypb.homelab.server_baseline` | `site_server_baseline` |
+| base | `chrony` | `pypb.homelab.chrony` | `site_chrony` |
+| base | `swap` | `pypb.homelab.swap` | `site_swap` |
+| base | `smtp_client` | `pypb.homelab.smtp_client` | `site_smtp_client` |
+| base | `unattended_upgrades` | `pypb.homelab.unattended_upgrades` | `site_unattended_upgrades` |
+| base | `acme_certificates` | `pypb.homelab.acme_certificates` | `site_acme_certificates` |
+| firewall | `wireguard` | `pypb.homelab.wireguard` | `site_wireguard` |
+| firewall | `nftables` | `pypb.homelab.nftables` | `site_nftables` |
+| firewall | `fail2ban` | `pypb.homelab.fail2ban` | `site_fail2ban` |
+| firewall | `server_hardening` | `pypb.homelab.server_hardening` | `site_server_hardening` |
+| services | `docker` | `geerlingguy.docker` | `site_docker` |
+| services | `haproxy` | `pypb.homelab.haproxy` | `site_haproxy` |
+| monitoring | `zabbix_agent` | `community.zabbix.zabbix_agent`, adding the `zabbix` user to `ssl-cert`, and to `docker` when `site_docker` is true | `site_zabbix_agent` |
+| monitoring | `zabbix_host` | The `community.zabbix.zabbix_host` module | `site_zabbix_host` |
+| monitoring | `alloy` | `grafana.grafana.alloy` | `site_alloy` |
+| backup | `restic_backup` | The `pypb.homelab.restic_backup` playbook | `site_restic_backup` |
+
+Every `site_<role>` variable defaults to false. The order is what the roles need:
+the account Ansible uses exists before sshd limits logins, the certificates before
+the services that use them, the firewall before the services open their ports,
+fail2ban after nftables, which it bans through, and the Zabbix agent after Docker.
+
+`zabbix_host` registers the host through the Zabbix API host in
+`zabbix_host_config_api_host`, with `zabbix_host_config_groups`,
+`zabbix_host_config_link_templates`, `zabbix_host_config_interface_dns` and,
+optionally, `zabbix_host_config_description`.
+
+The roles from outside this collection are included when they run, so they only have
+to be installed when a host enables them. `community.zabbix` is always needed.
 
 | Playbook | Description |
 |---|---|
@@ -113,12 +165,14 @@ molecule test --scenario-name nftables
 molecule test --scenario-name fail2ban
 molecule test --scenario-name wireguard
 molecule test --scenario-name haproxy
+molecule test --scenario-name site
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and
 `DOCKER_HOST` pointing to it, and the `docker` command, which can be Podman's. They also
 need this collection, `ansible.posix`, `community.docker`, `community.crypto` and
-`community.general` on `ANSIBLE_COLLECTIONS_PATH`.
+`community.general` on `ANSIBLE_COLLECTIONS_PATH`, and the `site` scenario also
+`community.zabbix`.
 
 Describe each change in a fragment under `changelogs/fragments/`, then generate
 the changelog at release time with `antsibull-changelog release`.
