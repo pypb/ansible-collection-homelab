@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+[zram0]
+{% for key, value in __swap_zram_device_settings | dictsort %}
+{{ key }} = {{ value }}
+{% endfor %}

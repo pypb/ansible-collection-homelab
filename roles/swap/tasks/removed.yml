@@ -1,0 +1,22 @@
+---
+# A container sees its host's swap.
+- name: Turn off the swap files
+  ansible.builtin.command:
+    argv: [swapoff, "{{ item }}"]
+  loop: "{{ swap_removed_files | select('in', __swap_active) | list }}"
+  changed_when: true
+  when: not __swap_container | bool
+
+- name: Remove the swap files from fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*{{ item | regex_escape }}\s'
+    state: absent
+  loop: "{{ swap_removed_files }}"
+  notify: Reload systemd
+
+- name: Delete the swap files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ swap_removed_files }}"

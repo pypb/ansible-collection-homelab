@@ -1,0 +1,79 @@
+---
+- name: Look for the encrypted swap device
+  ansible.builtin.stat:
+    path: "{{ __swap_encrypted_device }}"
+  register: __swap_encrypted_open
+
+- name: Set up encrypted swap
+  when: swap_encrypted_enabled | bool
+  block:
+    - name: Install systemd-cryptsetup
+      ansible.builtin.apt:
+        name: "{{ __swap_cryptsetup_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: __swap_cryptsetup_packages | length > 0
+
+    # Resizing the file under an open device would corrupt the swap in it, so a new
+    # size waits until the device is closed.
+    - name: Create the encrypted swap file
+      community.general.filesize:
+        path: "{{ swap_encrypted_file }}"
+        size: "{{ swap_encrypted_size_mb }}MiB"
+        owner: root
+        group: root
+        mode: "0600"
+      when: not __swap_encrypted_open['stat']['exists']
+
+    # systemd-cryptsetup sets up a loop device for the file, opens it with a key from
+    # /dev/urandom, and formats it as swap, at every boot.
+    - name: Add the encrypted swap to crypttab
+      community.general.crypttab:
+        name: "{{ swap_encrypted_name }}"
+        backing_device: "{{ swap_encrypted_file }}"
+        password: /dev/urandom
+        opts: "{{ __swap_encrypted_options }}"
+        state: present
+      notify:
+        - Reload systemd
+        - Start the encrypted swap
+
+    - name: Add the encrypted swap to fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*{{ __swap_encrypted_device | regex_escape }}\s'
+        line: "{{ __swap_encrypted_device }} none swap defaults,pri={{ swap_encrypted_priority }} 0 0"
+      notify:
+        - Reload systemd
+        - Start the encrypted swap
+
+- name: Remove encrypted swap
+  when: not swap_encrypted_enabled | bool
+  block:
+    - name: Stop the encrypted swap
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - "dev-mapper-{{ swap_encrypted_name }}.swap"
+        - "systemd-cryptsetup@{{ swap_encrypted_name }}.service"
+      when: __swap_encrypted_open['stat']['exists']
+
+    - name: Remove the encrypted swap from fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*{{ __swap_encrypted_device | regex_escape }}\s'
+        state: absent
+      notify: Reload systemd
+
+    - name: Remove the encrypted swap from crypttab
+      community.general.crypttab:
+        name: "{{ swap_encrypted_name }}"
+        state: absent
+      notify: Reload systemd
+
+    - name: Delete the encrypted swap file
+      ansible.builtin.file:
+        path: "{{ swap_encrypted_file }}"
+        state: absent

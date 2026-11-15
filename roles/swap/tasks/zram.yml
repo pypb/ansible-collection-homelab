@@ -1,0 +1,79 @@
+---
+# zram-generator owns the zram devices. An fstab line for one would define the same
+# swap unit twice.
+- name: Remove the zram devices from fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*/dev/zram[0-9]+\s'
+    state: absent
+  notify: Reload systemd
+
+- name: Set up zram swap
+  when: swap_zram_enabled | bool
+  block:
+    # Ubuntu's -generic kernels have it in linux-modules-extra.
+    - name: Look for the zram kernel module
+      ansible.builtin.command:
+        argv: [modinfo, --field, name, zram]
+      register: __swap_zram_module
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: not __swap_container | bool
+
+    - name: Check that the kernel has zram
+      ansible.builtin.assert:
+        that: __swap_zram_module['rc'] == 0
+        fail_msg: >-
+          The running kernel, {{ ansible_facts['kernel'] }}, has no zram module. On
+          Ubuntu, install linux-modules-extra for it, or set swap_zram_enabled to false.
+        quiet: true
+      when: not __swap_container | bool
+
+    - name: Install systemd-zram-generator
+      ansible.builtin.apt:
+        name: systemd-zram-generator
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # Replaces the package's /usr/lib/systemd/zram-generator.conf.
+    - name: Write the zram device settings
+      ansible.builtin.template:
+        src: zram-generator.conf.j2
+        dest: "{{ __swap_zram_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Start the zram swap
+
+- name: Remove zram swap
+  when: not swap_zram_enabled | bool
+  block:
+    - name: Look for the zram setup unit
+      ansible.builtin.stat:
+        path: "{{ __swap_zram_setup_unit }}"
+      register: __swap_zram_unit
+
+    # Turns the swap off and resets the device.
+    - name: Stop the zram swap
+      ansible.builtin.systemd_service:
+        name: systemd-zram-setup@zram0.service
+        state: stopped
+      when: __swap_zram_unit['stat']['exists']
+
+    - name: Remove the zram device settings
+      ansible.builtin.file:
+        path: "{{ __swap_zram_conf }}"
+        state: absent
+      notify: Reload systemd
+
+    # Its own settings would still set up a device.
+    - name: Purge systemd-zram-generator
+      ansible.builtin.apt:
+        name: systemd-zram-generator
+        state: absent
+        purge: true
+      notify: Reload systemd
