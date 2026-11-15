@@ -1,0 +1,10 @@
+---
+- name: Prepare hosts like a server
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # HAProxy's unit reloads with /bin/kill, which minimal images lack.
+    - name: Install procps
+      ansible.builtin.apt:
+        name: procps
+        update_cache: true

@@ -1,0 +1,32 @@
+---
+argument_specs:
+  main:
+    short_description: Sets up HAProxy.
+    description:
+      - Installs HAProxy and writes C(/etc/haproxy/haproxy.cfg), with the global and defaults sections, frontends, backends and listen sections.
+      - The configuration is checked with C(haproxy -c) before it's written, so a broken one never replaces the running one.
+      - HAProxy reloads after a change, which keeps established connections.
+    author:
+      - pypb
+    options:
+      haproxy_global:
+        type: str
+        description:
+          - Lines of the global section, after the distribution's C(chroot), C(user), C(group) and C(daemon).
+          - Defaults to logging to stdout, and an admin stats socket. Replacing it drops both.
+          - Keep C(expose-fd listeners) on the stats socket, so that reloads keep the listening sockets.
+      haproxy_defaults:
+        type: str
+        description: Lines of the defaults section. Defaults to HTTP mode, with the distribution's timeouts and error files.
+      haproxy_frontends:
+        type: dict
+        default: {}
+        description: Frontends, as a dict of name and the section's lines.
+      haproxy_backends:
+        type: dict
+        default: {}
+        description: Backends, as a dict of name and the section's lines.
+      haproxy_listens:
+        type: dict
+        default: {}
+        description: Listen sections, which combine a frontend and a backend, as a dict of name and the section's lines.

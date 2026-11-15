@@ -30,6 +30,8 @@ migrated into `roles/`.
   - `fail2ban`: bans hosts that fail to log in, banning through nftables
   - `wireguard`: a WireGuard interface with wg-quick, with peers, a mesh of inventory
     hosts and registration as a peer on OPNsense
+  - `haproxy`: HAProxy with frontends, backends and listen sections, checked before
+    they are loaded
 - Playbooks:
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and
