@@ -88,14 +88,14 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Reload the udev rules
+  notify: Reload the udev rules for iSCSI devices
   when: iscsi_initiator_device_vendors | length > 0
 
 - name: Remove the disk timeout
   ansible.builtin.file:
     path: /etc/udev/rules.d/99-iscsi-timeout.rules
     state: absent
-  notify: Reload the udev rules
+  notify: Reload the udev rules for iSCSI devices
   when: iscsi_initiator_device_vendors | length == 0
 
 # open-iscsi logs in to the targets marked automatic at boot.

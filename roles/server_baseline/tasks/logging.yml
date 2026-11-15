@@ -18,14 +18,14 @@
   vars:
     __server_baseline_dropin_section: Journal
     __server_baseline_dropin_settings: "{{ __server_baseline_journald }}"
-  notify: Restart journald
+  notify: Restart journald for the baseline settings
   when: __server_baseline_journald | length > 0
 
 - name: Remove the journald settings
   ansible.builtin.file:
     path: "{{ __server_baseline_journald_dropin }}"
     state: absent
-  notify: Restart journald
+  notify: Restart journald for the baseline settings
   when: __server_baseline_journald | length == 0
 
 # journald doesn't remove it when it stops writing there, and journalctl still reads it.

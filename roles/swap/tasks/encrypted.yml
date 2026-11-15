@@ -36,7 +36,7 @@
         opts: "{{ __swap_encrypted_options }}"
         state: present
       notify:
-        - Reload systemd
+        - Reload systemd for the swap units
         - Start the encrypted swap
 
     - name: Add the encrypted swap to fstab
@@ -45,7 +45,7 @@
         regexp: '^\s*{{ __swap_encrypted_device | regex_escape }}\s'
         line: "{{ __swap_encrypted_device }} none swap defaults,pri={{ swap_encrypted_priority }} 0 0"
       notify:
-        - Reload systemd
+        - Reload systemd for the swap units
         - Start the encrypted swap
 
 - name: Remove encrypted swap
@@ -65,13 +65,13 @@
         path: /etc/fstab
         regexp: '^\s*{{ __swap_encrypted_device | regex_escape }}\s'
         state: absent
-      notify: Reload systemd
+      notify: Reload systemd for the swap units
 
     - name: Remove the encrypted swap from crypttab
       community.general.crypttab:
         name: "{{ swap_encrypted_name }}"
         state: absent
-      notify: Reload systemd
+      notify: Reload systemd for the swap units
 
     - name: Delete the encrypted swap file
       ansible.builtin.file:

@@ -27,14 +27,14 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Update GRUB
+      notify: Update GRUB for the baseline consoles
       when: __server_baseline_grub_managed | bool
 
     - name: Remove the GRUB settings
       ansible.builtin.file:
         path: "{{ __server_baseline_grub_dropin }}"
         state: absent
-      notify: Update GRUB
+      notify: Update GRUB for the baseline consoles
       when: not __server_baseline_grub_managed | bool
 
 # A Raspberry Pi without GRUB reads the kernel command line from a single line in a file.

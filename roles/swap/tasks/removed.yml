@@ -13,7 +13,7 @@
     regexp: '^\s*{{ item | regex_escape }}\s'
     state: absent
   loop: "{{ swap_removed_files }}"
-  notify: Reload systemd
+  notify: Reload systemd for the swap units
 
 - name: Delete the swap files
   ansible.builtin.file:
