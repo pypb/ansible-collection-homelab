@@ -1,0 +1,55 @@
+---
+- name: Prepare hosts like installed servers
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Install packages for the role to purge
+      ansible.builtin.apt:
+        name: [inetutils-telnet, rfkill, rsync]
+        update_cache: true
+
+    - name: Create the sshd drop-in directory
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        mode: "0755"
+
+    - name: Write files for the role to delete
+      ansible.builtin.copy:
+        content: "old\n"
+        dest: "{{ item }}"
+        mode: "0600"
+      loop:
+        - /etc/ssh/sshd_config.d/50-cloud-init.conf
+        - /root/dead.letter
+
+    - name: Create the Raspberry Pi firmware directory
+      ansible.builtin.file:
+        path: /boot/firmware
+        state: directory
+        mode: "0755"
+      when: inventory_hostname == 'hardening-ubuntu2604'
+
+    - name: Write Raspberry Pi firmware settings
+      ansible.builtin.copy:
+        content: |
+          [pi4]
+          arm_boost=1
+
+          [all]
+          arm_64bit=1
+        dest: /boot/firmware/config.txt
+        mode: "0755"
+      when: inventory_hostname == 'hardening-ubuntu2604'
+
+    # rsync.service needs a configuration file to start.
+    - name: Configure the rsync daemon
+      ansible.builtin.copy:
+        content: "[tmp]\npath = /tmp\n"
+        dest: /etc/rsyncd.conf
+        mode: "0644"
+
+    - name: Start the rsync daemon for the role to stop
+      ansible.builtin.systemd_service:
+        name: rsync.service
+        state: started

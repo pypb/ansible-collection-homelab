@@ -1,0 +1,24 @@
+---
+- name: Look for the Raspberry Pi firmware settings
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ __server_hardening_pi_configs }}"
+  register: __server_hardening_pi_config
+
+# Takes effect at the next boot.
+- name: Turn the radios off or on in the firmware settings
+  ansible.builtin.lineinfile:
+    path: "{{ __server_hardening_pi_config_file }}"
+    regexp: "^dtoverlay={{ item['overlay'] }}$"
+    line: "dtoverlay={{ item['overlay'] }}"
+    insertafter: '^\[all\]'
+    state: "{{ 'absent' if item['keep'] | bool else 'present' }}"
+  loop:
+    - {overlay: disable-wifi, keep: "{{ server_hardening_wifi }}"}
+    - {overlay: disable-bt, keep: "{{ server_hardening_bluetooth }}"}
+  loop_control:
+    label: "{{ item['overlay'] }}"
+  vars:
+    __server_hardening_pi_config_file: >-
+      {{ __server_hardening_pi_config['results'] | selectattr('stat.exists') | map(attribute='item') | first }}
+  when: __server_hardening_pi_config['results'] | selectattr('stat.exists') | list | length > 0

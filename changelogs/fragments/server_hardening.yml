@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - server_hardening - new role that hardens a Debian or Ubuntu server beyond
+    server_baseline. It installs AppArmor, debsums and passwdqc, purges network
+    services, auditing tools and crash reporting, purges wifi and bluetooth and
+    turns the radios off on a Raspberry Pi, writes sysctl settings, blocks kernel
+    modules, stops and masks services such as rpcbind, limits core dumps, closes
+    idle login shells, sets how often debsums runs, and deletes given files.

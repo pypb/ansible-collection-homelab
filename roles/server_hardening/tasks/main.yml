@@ -1,0 +1,37 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: [min, virtual]
+  when: __server_hardening_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - server_hardening_packages | intersect(__server_hardening_purge) | length == 0
+      - server_hardening_masked_units | reject('match', '^[A-Za-z0-9@_.:-]+$') | length == 0
+      - __server_hardening_blocked_modules | reject('match', '^[A-Za-z0-9_-]+$') | length == 0
+      - server_hardening_sysctl.keys() | reject('match', '^[a-z0-9_]+(\.[A-Za-z0-9_-]+)+$') | length == 0
+      - server_hardening_sysctl.values() | map('string') | select('search', '\n') | length == 0
+      - server_hardening_limits | select('search', '\n') | length == 0
+      - server_hardening_shell_timeout is none or server_hardening_shell_timeout | int > 0
+      - server_hardening_debsums_cron in ['daily', 'weekly', 'monthly', 'never']
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. A package can't be both installed and
+      purged. server_hardening_masked_units must be unit names, the blocked modules module
+      names, server_hardening_sysctl sysctl keys with values on one line, and
+      server_hardening_limits lines. server_hardening_shell_timeout must be a number of
+      seconds, and server_hardening_debsums_cron daily, weekly, monthly or never.
+    quiet: true
+
+- name: Manage packages
+  ansible.builtin.include_tasks: packages.yml
+
+- name: Restrict the kernel
+  ansible.builtin.include_tasks: kernel.yml
+
+- name: Configure the system
+  ansible.builtin.include_tasks: system.yml
+
+- name: Turn off the Raspberry Pi radios
+  ansible.builtin.include_tasks: raspberry_pi.yml

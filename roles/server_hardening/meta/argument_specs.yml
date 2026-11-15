@@ -1,0 +1,83 @@
+---
+argument_specs:
+  main:
+    short_description: Hardens a Debian or Ubuntu server.
+    description:
+      - Installs AppArmor, debsums and passwdqc, and purges network services, auditing tools and crash reporting.
+      - Purges wifi and bluetooth, and turns the radios off on a Raspberry Pi.
+      - Writes sysctl settings, and blocks kernel modules for rare protocols, file systems and devices.
+      - Stops and masks services, limits core dumps, closes idle login shells and sets how often debsums runs.
+      - The defaults are strict. Read the README before applying them, since some settings affect networking and debugging.
+    author:
+      - pypb
+    options:
+      server_hardening_packages:
+        type: list
+        elements: str
+        default: [apparmor, debsums, libpam-passwdqc]
+        description: Packages to install.
+      server_hardening_purged_packages:
+        type: list
+        elements: str
+        description:
+          - Packages to purge, such as avahi-daemon, telnet, talk, lynis and rkhunter. Patterns such as C(telnet*) work.
+          - The default is in C(defaults/main.yml).
+      server_hardening_ubuntu_purged_packages:
+        type: list
+        elements: str
+        default: [apport, apport-symptoms, python3-apport]
+        description: Packages to purge on Ubuntu.
+      server_hardening_wifi:
+        type: bool
+        default: false
+        description:
+          - Keep wifi. False purges rfkill and wpasupplicant, and adds C(dtoverlay=disable-wifi) to a Raspberry Pi's C(config.txt).
+          - True removes that line again. Takes effect at the next boot.
+      server_hardening_bluetooth:
+        type: bool
+        default: false
+        description:
+          - Keep bluetooth. False purges bluetooth and bluez, and blocks the bluetooth and btusb modules.
+          - False also adds C(dtoverlay=disable-bt) to a Raspberry Pi's C(config.txt).
+          - True removes that line again. Takes effect at the next boot.
+      server_hardening_masked_units:
+        type: list
+        elements: str
+        description:
+          - Systemd units to stop and mask, by default rpcbind, the other NFS RPC services, rsync and Ubuntu Pro's services.
+          - Units taken off the list stay masked.
+      server_hardening_blocked_modules:
+        type: list
+        elements: str
+        description:
+          - Kernel modules that can't be loaded, by default rare network protocols, FireWire, rarely used file systems, floppy, ksmbd, uvcvideo and vivid.
+          - Written to C(/etc/modprobe.d/90-server-hardening.conf). Loaded modules stay loaded until the next boot.
+      server_hardening_extra_blocked_modules:
+        type: list
+        elements: str
+        default: []
+        description: More kernel modules to block, added to O(server_hardening_blocked_modules).
+      server_hardening_sysctl:
+        type: dict
+        description:
+          - Settings for C(/etc/sysctl.d/90-server-hardening.conf), by default those from madaidans-insecurities' Linux hardening guide.
+          - Applied right away, except in containers, which share their host's kernel.
+      server_hardening_limits:
+        type: list
+        elements: str
+        default: ["* hard core 0"]
+        description: Lines for C(/etc/security/limits.d/90-server-hardening.conf). The file is removed when empty.
+      server_hardening_shell_timeout:
+        type: int
+        default: 86400
+        description: Seconds an idle login shell stays open, set as C(TMOUT) in C(/etc/profile.d/server-hardening.sh). Not managed when null.
+      server_hardening_debsums_cron:
+        type: str
+        default: daily
+        choices: [daily, weekly, monthly, never]
+        description: How often debsums checks the installed files against their checksums.
+      server_hardening_removed_files:
+        type: list
+        elements: path
+        default: []
+        description: Files and directories to delete, such as C(/etc/ssh/sshd_config.d/50-cloud-init.conf).

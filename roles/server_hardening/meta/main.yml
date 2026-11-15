@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: server_hardening
+  namespace: pypb
+  author: pypb
+  description: Hardens a Debian or Ubuntu server, with sysctl, blocked kernel modules, masked services and fewer packages.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - hardening
+    - security
+    - sysctl
+    - debian
+    - ubuntu
+dependencies: []

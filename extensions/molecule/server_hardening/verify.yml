@@ -1,0 +1,109 @@
+---
+- name: Verify the hardened servers
+  hosts: targets
+  gather_facts: false
+  vars:
+    __molecule_pi: "{{ inventory_hostname == 'hardening-ubuntu2604' }}"
+  tasks:
+    - name: Read package facts
+      ansible.builtin.package_facts:
+
+    - name: Check packages were installed and purged
+      ansible.builtin.assert:
+        that:
+          - "'apparmor' in ansible_facts['packages']"
+          - "'debsums' in ansible_facts['packages']"
+          - "'libpam-passwdqc' in ansible_facts['packages']"
+          - "'inetutils-telnet' not in ansible_facts['packages']"
+          - "'rfkill' not in ansible_facts['packages']"
+
+    - name: Read the written files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/sysctl.d/90-server-hardening.conf
+        - /etc/modprobe.d/90-server-hardening.conf
+        - /etc/security/limits.d/90-server-hardening.conf
+        - /etc/profile.d/server-hardening.sh
+        - /etc/default/debsums
+      register: __molecule_files
+
+    - name: Check the written files
+      ansible.builtin.assert:
+        that:
+          - __contents[0] is search('\nnet.ipv4.conf.all.log_martians = 1\nnet.ipv4.icmp_echo_ignore_broadcasts = 1\n$')
+          - __contents[1] is search('^install dccp /bin/false\nblacklist dccp$', multiline=true)
+          - __contents[1] is search('^install esp4 /bin/false$', multiline=true)
+          - __contents[1] is search('^install btusb /bin/false$', multiline=true)
+          - __contents[1] | regex_findall('(?m)^install rxrpc ') | length == 1
+          - __contents[2] is search('\n\* hard core 0\n$')
+          - __contents[3] is search('\nexport TMOUT=3600\n$')
+          - __contents[4] is search('^CRON_CHECK=weekly$', multiline=true)
+      vars:
+        __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+
+    - name: Read whether the units are masked
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, rpcbind.service, rpcbind.socket, rsync.service]
+      register: __molecule_masked
+      changed_when: false
+      failed_when: false
+
+    - name: Check the units are masked
+      ansible.builtin.assert:
+        that: __molecule_masked['stdout_lines'] == ['masked', 'masked', 'masked']
+
+    - name: Read whether rsync is running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, rsync.service]
+      register: __molecule_rsync
+      changed_when: false
+      failed_when: false
+
+    - name: Check rsync was stopped
+      ansible.builtin.assert:
+        that: __molecule_rsync['stdout'] == 'inactive'
+
+    - name: Look for the deleted files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/ssh/sshd_config.d/50-cloud-init.conf
+        - /root/dead.letter
+      register: __molecule_deleted
+
+    - name: Check the files were deleted
+      ansible.builtin.assert:
+        that: __molecule_deleted['results'] | selectattr('stat.exists') | list | length == 0
+
+    - name: Read the Raspberry Pi firmware settings
+      ansible.builtin.slurp:
+        src: /boot/firmware/config.txt
+      register: __molecule_pi_config
+      when: __molecule_pi | bool
+
+    - name: Check the radios are off in the [all] section
+      ansible.builtin.assert:
+        that: __molecule_pi_config['content'] | b64decode ==
+          "[pi4]\narm_boost=1\n\n[all]\ndtoverlay=disable-bt\ndtoverlay=disable-wifi\narm_64bit=1\n"
+      when: __molecule_pi | bool
+
+    - name: Keep wifi and bluetooth
+      ansible.builtin.include_role:
+        name: pypb.homelab.server_hardening
+        tasks_from: raspberry_pi.yml
+      vars:
+        server_hardening_wifi: true
+        server_hardening_bluetooth: true
+      when: __molecule_pi | bool
+
+    - name: Read the firmware settings again
+      ansible.builtin.slurp:
+        src: /boot/firmware/config.txt
+      register: __molecule_pi_config
+      when: __molecule_pi | bool
+
+    - name: Check the radio settings were removed
+      ansible.builtin.assert:
+        that: __molecule_pi_config['content'] | b64decode == "[pi4]\narm_boost=1\n\n[all]\narm_64bit=1\n"
+      when: __molecule_pi | bool

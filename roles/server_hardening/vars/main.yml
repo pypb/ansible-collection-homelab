@@ -1,0 +1,33 @@
+---
+__server_hardening_required_facts:
+  - distribution
+  - os_family
+  - virtualization_type
+  - virtualization_role
+
+__server_hardening_ubuntu: "{{ ansible_facts['distribution'] == 'Ubuntu' }}"
+
+# Containers share their host's kernel.
+__server_hardening_container: >-
+  {{ ansible_facts['virtualization_role'] == 'guest'
+     and ansible_facts['virtualization_type'] in ['lxc', 'docker', 'podman', 'container', 'containerd', 'systemd-nspawn', 'openvz'] }}
+
+__server_hardening_purge: >-
+  {{ server_hardening_purged_packages
+     + (server_hardening_ubuntu_purged_packages if __server_hardening_ubuntu | bool else [])
+     + ([] if server_hardening_wifi | bool else ['rfkill', 'wpasupplicant'])
+     + ([] if server_hardening_bluetooth | bool else ['bluetooth', 'bluez']) }}
+
+__server_hardening_blocked_modules: >-
+  {{ (server_hardening_blocked_modules + server_hardening_extra_blocked_modules
+      + ([] if server_hardening_bluetooth | bool else ['bluetooth', 'btusb'])) | unique }}
+
+__server_hardening_sysctl_file: /etc/sysctl.d/90-server-hardening.conf
+__server_hardening_modprobe_file: /etc/modprobe.d/90-server-hardening.conf
+__server_hardening_limits_file: /etc/security/limits.d/90-server-hardening.conf
+__server_hardening_profile_file: /etc/profile.d/server-hardening.sh
+
+# The Raspberry Pi firmware settings, on Ubuntu and newer Raspberry Pi OS, then older.
+__server_hardening_pi_configs:
+  - /boot/firmware/config.txt
+  - /boot/config.txt

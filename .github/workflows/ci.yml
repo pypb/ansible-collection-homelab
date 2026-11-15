@@ -53,6 +53,7 @@ jobs:
           - ocfs2
           - iscsi_initiator
           - server_baseline
+          - server_hardening
           - swap
           - unattended_upgrades
           - chrony
