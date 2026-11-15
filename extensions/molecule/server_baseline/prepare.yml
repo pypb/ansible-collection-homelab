@@ -92,3 +92,23 @@
     - name: Install a package for the role to purge
       ansible.builtin.apt:
         name: nano
+
+    - name: Install rsyslog for the role to purge
+      ansible.builtin.apt:
+        name: rsyslog
+
+    - name: Create a persistent journal directory
+      ansible.builtin.file:
+        path: /var/log/journal/0123456789abcdef0123456789abcdef
+        state: directory
+        mode: "0755"
+
+    - name: Write rsyslog log files and a persistent journal
+      ansible.builtin.copy:
+        content: "old\n"
+        dest: "{{ item }}"
+        mode: "0640"
+      loop:
+        - /var/log/syslog.1
+        - /var/log/auth.log.2.gz
+        - /var/log/journal/0123456789abcdef0123456789abcdef/system.journal

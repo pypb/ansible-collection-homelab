@@ -17,7 +17,7 @@ migrated into `roles/`.
   - `ocfs2`: sets up the OCFS2 cluster file system with o2cb, and its mounts
   - `iscsi_initiator`: sets up open-iscsi and logs in to targets, with optional multipathd
   - `server_baseline`: basic configuration of a Debian or Ubuntu server, including
-    resolv.conf, motd and the kernel consoles and GRUB menu
+    resolv.conf, journald, motd and the kernel consoles and GRUB menu
   - `swap`: zram swap with systemd-zram-generator, and encrypted swap in a file
     through crypttab
   - `unattended_upgrades`: installs upgrades automatically, with reports and reboots

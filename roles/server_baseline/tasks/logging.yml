@@ -1,0 +1,67 @@
+---
+- name: Create the journald configuration directory
+  ansible.builtin.file:
+    path: "{{ __server_baseline_journald_dropin | dirname }}"
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+  when: __server_baseline_journald | length > 0
+
+- name: Write the journald settings
+  ansible.builtin.template:
+    src: journald.conf.j2
+    dest: "{{ __server_baseline_journald_dropin }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+  when: __server_baseline_journald | length > 0
+
+- name: Remove the journald settings
+  ansible.builtin.file:
+    path: "{{ __server_baseline_journald_dropin }}"
+    state: absent
+  notify: Restart journald
+  when: __server_baseline_journald | length == 0
+
+# journald doesn't remove it when it stops writing there, and journalctl still reads it.
+- name: Find the persistent journal
+  ansible.builtin.find:
+    paths: /var/log/journal
+    file_type: directory
+  register: __server_baseline_journal_dirs
+  when: __server_baseline_journald_volatile | bool
+
+# Until the handler restarts it, journald still writes there, and would make the
+# directory again.
+- name: Move the journal to /run
+  ansible.builtin.command:
+    argv: [journalctl, --relinquish-var]
+  changed_when: true
+  when: __server_baseline_journal_dirs['files'] | default([]) | length > 0
+
+- name: Delete the persistent journal
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: absent
+  loop: "{{ __server_baseline_journal_dirs['files'] | default([]) }}"
+  loop_control:
+    label: "{{ item['path'] }}"
+
+# Purging rsyslog leaves its log files, and the logrotate settings that rotated them go.
+- name: Find rsyslog's log files
+  ansible.builtin.find:
+    paths: /var/log
+    patterns: "{{ __server_baseline_rsyslog_logs }}"
+    file_type: file
+  register: __server_baseline_rsyslog_files
+  when: not server_baseline_rsyslog | bool
+
+- name: Delete rsyslog's log files
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    state: absent
+  loop: "{{ __server_baseline_rsyslog_files['files'] | default([]) }}"
+  loop_control:
+    label: "{{ item['path'] }}"

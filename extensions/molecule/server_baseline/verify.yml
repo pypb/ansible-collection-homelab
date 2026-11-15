@@ -15,6 +15,7 @@
           - "'tzdata' in ansible_facts['packages']"
           - "'sudo' in ansible_facts['packages']"
           - "'nano' not in ansible_facts['packages']"
+          - "'rsyslog' not in ansible_facts['packages']"
           - "'python3-debian' in ansible_facts['packages'] or not __molecule_ubuntu | bool"
 
     - name: Read the written files
@@ -29,6 +30,7 @@
         - /etc/NetworkManager/conf.d/dns.conf
         - /etc/dhcp/dhclient-enter-hooks.d/disable_resolvconf_update
         - /etc/vim/vimrc.local
+        - /etc/systemd/journald.conf.d/90-server-baseline.conf
       register: __molecule_files
 
     - name: Check the written files
@@ -47,8 +49,30 @@
           - __contents[5] is search('^dns=none$', multiline=true)
           - __contents[6] is search('make_resolv_conf')
           - __contents[7] is search('^set mouse=$', multiline=true)
+          - __contents[8] is search('\n\[Journal\]\nForwardToSyslog=no\nForwardToWall=no\nStorage=volatile\n$')
       vars:
         __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+
+    - name: Look for the old logs
+      ansible.builtin.find:
+        paths: [/var/log, /var/log/journal]
+        patterns: [syslog*, auth.log*, "*.journal"]
+        recurse: true
+      register: __molecule_old_logs
+
+    - name: Check the old logs were deleted
+      ansible.builtin.assert:
+        that: __molecule_old_logs['files'] | length == 0
+
+    - name: Read journald's storage
+      ansible.builtin.command:
+        argv: [journalctl, --header, --no-pager]
+      register: __molecule_journal
+      changed_when: false
+
+    - name: Check journald writes to /run
+      ansible.builtin.assert:
+        that: "__molecule_journal['stdout'] is search('File path: /run/log/journal/')"
 
     - name: Read whether resolv.conf is a link
       ansible.builtin.stat:
