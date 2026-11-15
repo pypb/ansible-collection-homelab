@@ -9,8 +9,9 @@ Sets up a WireGuard interface with wg-quick:
   gateway, and a mesh of inventory hosts that run the role too. A mesh peer's
   public key is read from the peer itself.
 - Brings up `wg-quick@<interface>` at boot. A change of peers is applied with a
-  reload, which keeps the sessions of the other peers, and a change of address
-  with a restart.
+  reload, which keeps the sessions of the other peers. A change of address or
+  allowed IPs takes a restart, since wg-quick only sets addresses and routes
+  when it brings up the interface.
 - Optionally registers the host as a peer of a WireGuard instance on an
   OPNsense firewall, through its API.
 
@@ -103,7 +104,7 @@ and its keepalives bring the tunnel back up when its address changes.
 - **Check mode:** yes. On a host without a key yet, the OPNsense registration
   is skipped. The changes to the OPNsense peer are shown as a message.
 - **Applied right away:** yes, with a reload, or a restart for a change of
-  address.
+  address or allowed IPs.
 - **Replaced files:** `/etc/wireguard/<interface>.conf`. The key pair is kept.
 - **Rollback:** none.
 

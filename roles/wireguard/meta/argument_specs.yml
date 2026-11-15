@@ -6,7 +6,8 @@ argument_specs:
       - Installs WireGuard's tools, generates a key pair on the host if it has none, and writes C(/etc/wireguard/<interface>.conf) for C(wg-quick@<interface>).
       - The private key stays in C(/etc/wireguard/privatekey) and is never read by Ansible.
       - Peers are either listed, or hosts of the inventory to mesh with, whose public keys are read from them.
-      - A change of peers is applied with a reload, which keeps the sessions of the other peers. A change of address restarts the interface.
+      - A change of peers is applied with a reload, which keeps the sessions of the other peers.
+      - A change of address or allowed IPs restarts the interface, since wg-quick only sets addresses and routes when it brings it up.
       - Optionally registers the host as a peer of a WireGuard instance on an OPNsense firewall, through its API.
     author:
       - pypb
