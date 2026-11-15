@@ -1,0 +1,13 @@
+---
+# Rules for the input chain of the inet filter table, one nft rule per item,
+# such as "tcp dport 22 ip saddr 192.0.2.0/24 ct state new accept". Loopback,
+# established connections, DHCP replies, ICMP and IPv6 neighbour discovery are
+# accepted before them, and everything else is dropped after them.
+nftables_input_rules: []
+
+# More input rules after those, so that a group and a host can each add some.
+nftables_input_extra_rules: []
+
+# Log dropped input packets with this prefix, such as "inet_filter_drop: ".
+# Not logged when empty.
+nftables_input_log_prefix: ""

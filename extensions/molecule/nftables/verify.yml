@@ -1,0 +1,40 @@
+---
+- name: Verify the firewall
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the loaded rules
+      ansible.builtin.command:
+        argv: [nft, list, ruleset]
+      register: __molecule_ruleset
+      changed_when: false
+
+    - name: Check the rules are loaded in order, and the other table stays
+      ansible.builtin.assert:
+        that:
+          - __molecule_ruleset['stdout'] is search('table inet other')
+          - __molecule_ruleset['stdout'] is search(__parts | join('(.|\n)*'))
+      vars:
+        __parts:
+          - 'ct state established,related accept'
+          - 'tcp dport 22 ip saddr { 192.0.2.0/24, 198.51.100.0/24 } ct state new accept'
+          - 'tcp dport { 80, 443 } ct state new accept'
+          - 'log prefix "inet_filter_drop: "'
+          - 'counter packets [0-9]+ bytes [0-9]+ drop'
+
+    - name: Read whether nftables starts at boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, nftables]
+      register: __molecule_enabled
+      changed_when: false
+
+    - name: Read the rules file
+      ansible.builtin.stat:
+        path: /etc/nftables.conf
+      register: __molecule_conf
+
+    - name: Check nftables starts at boot from a private file
+      ansible.builtin.assert:
+        that:
+          - __molecule_enabled['stdout'] == 'enabled'
+          - __molecule_conf['stat']['mode'] == '0600'

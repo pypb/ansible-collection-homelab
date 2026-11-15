@@ -1,0 +1,72 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - fail2ban_jails.keys() | reject('match', __fail2ban_name_pattern) | length == 0
+      - "'DEFAULT' not in fail2ban_jails"
+      - fail2ban_jails.values() | reject('mapping') | length == 0
+      - fail2ban_action_settings.keys() | reject('match', __fail2ban_name_pattern) | length == 0
+      - fail2ban_action_settings.values() | reject('mapping') | length == 0
+      - __fail2ban_values | map('string') | select('search', '\n') | length == 0
+    fail_msg: >-
+      fail2ban_jails and fail2ban_action_settings take names of letters, digits and _.-,
+      with a dict of settings each, and values on one line. Jail defaults go in
+      fail2ban_jail_defaults, not a DEFAULT jail.
+    quiet: true
+  vars:
+    __fail2ban_values: >-
+      {{ (fail2ban_settings.values() | list) + (fail2ban_jail_defaults.values() | list)
+         + (fail2ban_jails.values() | map('dict2items') | flatten | map(attribute='value') | list) }}
+
+# python3-systemd lets jails read the journal.
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name: [fail2ban, python3-systemd]
+    update_cache: true
+    cache_valid_time: 3600
+  register: __fail2ban_install
+
+- name: Write the settings and jails
+  ansible.builtin.template:
+    src: settings.local.j2
+    dest: "{{ item['dest'] }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ __fail2ban_files }}"
+  loop_control:
+    label: "{{ item['dest'] }}"
+  vars:
+    __fail2ban_sections: "{{ item['sections'] }}"
+  register: __fail2ban_written
+  notify: Reload fail2ban
+
+- name: Write the action settings
+  ansible.builtin.template:
+    src: settings.local.j2
+    dest: "/etc/fail2ban/action.d/{{ item['key'] }}.local"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ fail2ban_action_settings | dict2items }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+  vars:
+    __fail2ban_sections: "{{ item['value'] }}"
+  register: __fail2ban_actions_written
+  notify: Reload fail2ban
+
+# A broken setting would make the reload fail, so the run stops here instead.
+- name: Check the settings
+  ansible.builtin.command:
+    argv: [fail2ban-client, --test]
+  changed_when: false
+  when: __fail2ban_written is changed or __fail2ban_actions_written is changed
+
+- name: Start fail2ban at boot
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true
+    state: started
+  # In check mode, the package may not be installed yet.
+  when: not (ansible_check_mode and __fail2ban_install is changed)

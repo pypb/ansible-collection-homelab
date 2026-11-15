@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{% for section, settings in __fail2ban_sections | dictsort %}
+{%   if not loop.first %}
+
+{%   endif %}
+[{{ section }}]
+{%   for key, value in settings | dictsort %}
+{{ key }} = {{ ('true' if value else 'false') if value is boolean else value }}
+{%   endfor %}
+{% endfor %}

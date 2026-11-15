@@ -1,0 +1,31 @@
+---
+# Settings for the [DEFAULT] section of /etc/fail2ban/fail2ban.local, such as
+# loglevel and logtarget.
+fail2ban_settings: {}
+#  loglevel: INFO
+#  logtarget: SYSTEMD-JOURNAL
+
+# Settings for the [DEFAULT] section of /etc/fail2ban/jail.local, which every
+# jail inherits. The defaults ban through nftables.
+fail2ban_jail_defaults:
+  banaction: nftables-multiport
+  banaction_allports: nftables-allports
+
+# Jails, as a dict of jail name and its settings, also in jail.local. The sshd
+# jail reads sshd's messages from the journal.
+fail2ban_jails:
+  sshd:
+    enabled: true
+    backend: systemd
+
+# Addresses and networks that are never banned, as ignoreip of every jail.
+fail2ban_ignore_ips:
+  - 127.0.0.0/8
+  - ::1
+
+# Settings for actions, as a dict of action name, section and settings, written
+# to /etc/fail2ban/action.d/<action>.local, such as
+#   nftables-common:
+#     Init:
+#       chain_hook: prerouting
+fail2ban_action_settings: {}

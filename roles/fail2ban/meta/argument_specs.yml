@@ -1,0 +1,38 @@
+---
+argument_specs:
+  main:
+    short_description: Bans hosts that fail to log in, with fail2ban.
+    description:
+      - Installs fail2ban, and writes its settings, jails and action settings to C(.local) files, which override the distribution's.
+      - Checks them with C(fail2ban-client --test) before reloading fail2ban.
+      - By default, the sshd jail reads the journal and bans through nftables.
+    author:
+      - pypb
+    options:
+      fail2ban_settings:
+        type: dict
+        default: {}
+        description: Settings for the C([DEFAULT]) section of C(/etc/fail2ban/fail2ban.local), such as C(loglevel) and C(logtarget).
+      fail2ban_jail_defaults:
+        type: dict
+        default: {banaction: nftables-multiport, banaction_allports: nftables-allports}
+        description:
+          - Settings for the C([DEFAULT]) section of C(/etc/fail2ban/jail.local), which every jail inherits, such as C(bantime) and C(maxretry).
+          - Replacing it drops the default ban actions, so include them.
+      fail2ban_jails:
+        type: dict
+        default: {sshd: {enabled: true, backend: systemd}}
+        description:
+          - Jails, as a dict of jail name and its settings, in C(/etc/fail2ban/jail.local). Booleans become C(true) and C(false).
+          - Replacing it drops the default sshd jail, so include it to keep it.
+      fail2ban_ignore_ips:
+        type: list
+        elements: str
+        default: [127.0.0.0/8, "::1"]
+        description: Addresses and networks that are never banned, the C(ignoreip) of every jail.
+      fail2ban_action_settings:
+        type: dict
+        default: {}
+        description:
+          - Settings for actions, as a dict of action name, then section, then settings, written to C(/etc/fail2ban/action.d/<action>.local).
+          - "For example C({nftables-common: {Init: {chain_hook: prerouting}}})."

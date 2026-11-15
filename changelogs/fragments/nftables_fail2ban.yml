@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - nftables - new role for a host firewall. It writes an inet filter table whose
+    input chain drops what its rules don't accept, checks it with nft --check and
+    loads it, leaving the tables of other tools alone.
+  - fail2ban - new role that installs fail2ban and writes its settings, jails and
+    action settings to .local files, checked with fail2ban-client --test before
+    reloading. By default the sshd jail reads the journal and bans through nftables.

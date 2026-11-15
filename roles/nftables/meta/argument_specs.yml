@@ -1,0 +1,29 @@
+---
+argument_specs:
+  main:
+    short_description: A host firewall with nftables.
+    description:
+      - Writes C(/etc/nftables.conf) with an C(inet filter) table whose input chain drops what its rules don't accept.
+      - Checks the file with C(nft --check), loads it, and enables the nftables service.
+      - Only that table is replaced, so tables of other tools, such as fail2ban's and Kubernetes', stay.
+      - Forwarded and outgoing traffic is accepted.
+    author:
+      - pypb
+    options:
+      nftables_input_rules:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Rules for the input chain, one nft rule per item, such as C(tcp dport 22 ip saddr 192.0.2.0/24 ct state new accept).
+          - They come after the rules accepting loopback, established connections, DHCP replies, ICMP and IPv6 neighbour discovery.
+          - Everything they don't accept is dropped.
+      nftables_input_extra_rules:
+        type: list
+        elements: str
+        default: []
+        description: More input rules after O(nftables_input_rules), so that a group and a host can each add some.
+      nftables_input_log_prefix:
+        type: str
+        default: ""
+        description: Log dropped input packets with this prefix. Not logged when empty.

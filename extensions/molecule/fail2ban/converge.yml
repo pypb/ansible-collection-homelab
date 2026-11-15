@@ -1,0 +1,22 @@
+---
+- name: Converge servers with fail2ban
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Set up fail2ban
+      ansible.builtin.include_role:
+        name: pypb.homelab.fail2ban
+      vars:
+        fail2ban_settings:
+          loglevel: INFO
+          logtarget: SYSTEMD-JOURNAL
+        fail2ban_jail_defaults:
+          banaction: nftables-multiport
+          banaction_allports: nftables-allports
+          bantime: 2h
+        fail2ban_ignore_ips: [127.0.0.0/8, "::1", 192.0.2.0/24]
+        fail2ban_action_settings:
+          nftables-common:
+            Init:
+              chain_hook: prerouting
+              chain_priority: -50

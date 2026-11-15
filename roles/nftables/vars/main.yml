@@ -1,0 +1,3 @@
+---
+__nftables_config: /etc/nftables.conf
+__nftables_input_rules: "{{ nftables_input_rules + nftables_input_extra_rules }}"

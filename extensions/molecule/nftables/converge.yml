@@ -1,0 +1,14 @@
+---
+- name: Converge servers with a firewall
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Configure the firewall
+      ansible.builtin.include_role:
+        name: pypb.homelab.nftables
+      vars:
+        nftables_input_rules:
+          - tcp dport 22 ip saddr { 192.0.2.0/24, 198.51.100.0/24 } ct state new accept
+        nftables_input_extra_rules:
+          - tcp dport { 80, 443 } ct state new accept # web
+        nftables_input_log_prefix: "inet_filter_drop: "

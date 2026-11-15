@@ -1,0 +1,5 @@
+---
+- name: Load the nftables rules
+  ansible.builtin.command:
+    argv: [nft, -f, "{{ __nftables_config }}"]
+  changed_when: true

@@ -1,0 +1,15 @@
+---
+- name: Prepare hosts
+  hosts: targets
+  gather_facts: false
+  tasks:
+    # The rules must not reach this machine's own firewall.
+    - name: Read the container's network namespace
+      ansible.builtin.command:
+        argv: [readlink, /proc/1/ns/net]
+      register: __molecule_netns
+      changed_when: false
+
+    - name: Check the container has its own network namespace
+      ansible.builtin.assert:
+        that: __molecule_netns['stdout'] != lookup('ansible.builtin.pipe', 'readlink /proc/self/ns/net')

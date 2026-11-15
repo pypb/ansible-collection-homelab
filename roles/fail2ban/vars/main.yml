@@ -1,0 +1,11 @@
+---
+__fail2ban_jail_defaults: >-
+  {{ fail2ban_jail_defaults
+     | combine({'ignoreip': fail2ban_ignore_ips | join(' ')} if fail2ban_ignore_ips | length > 0 else {}) }}
+
+__fail2ban_files:
+  - {dest: /etc/fail2ban/fail2ban.local, sections: {DEFAULT: "{{ fail2ban_settings }}"}}
+  - dest: /etc/fail2ban/jail.local
+    sections: "{{ {'DEFAULT': __fail2ban_jail_defaults} | combine(fail2ban_jails) }}"
+
+__fail2ban_name_pattern: '^[A-Za-z0-9_.-]+$'
