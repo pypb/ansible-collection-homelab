@@ -37,7 +37,10 @@ __server_baseline_grub_dropin: /etc/default/grub.d/99-server-baseline.cfg
 __server_baseline_pi_cmdline: /boot/firmware/cmdline.txt
 
 __server_baseline_journald_dropin: /etc/systemd/journald.conf.d/90-server-baseline.conf
-__server_baseline_journald_volatile: "{{ server_baseline_journald.get('Storage', '') | string in ['volatile', 'none'] }}"
+__server_baseline_journald: >-
+  {{ server_baseline_journald
+     | combine({'Storage': server_baseline_journald_storage} if server_baseline_journald_storage | length > 0 else {}) }}
+__server_baseline_journald_volatile: "{{ server_baseline_journald_storage in ['volatile', 'none'] }}"
 
 # The files Debian's and Ubuntu's rsyslog configurations write, with their rotations.
 __server_baseline_rsyslog_logs:

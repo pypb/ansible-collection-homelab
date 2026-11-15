@@ -48,7 +48,8 @@ purge packages, turn off ICMP redirects, and keep motd-news as it is.
 | `server_baseline_resolv_conf_immutable` | `true` | Make resolv.conf immutable |
 | `server_baseline_sysctl_file` | `90-server-baseline.conf` | Name of the sysctl file in `/etc/sysctl.d` |
 | `server_baseline_sysctl` | No ICMP redirects | Sysctl settings |
-| `server_baseline_journald` | `{}` | journald settings, such as `Storage: volatile`. See [Logging](#logging) |
+| `server_baseline_journald_storage` | `""` | Where journald keeps the journal: `volatile`, `persistent`, `auto` or `none`. See [Logging](#logging) |
+| `server_baseline_journald` | `{}` | Other journald settings, such as `ForwardToSyslog: false` |
 | `server_baseline_rsyslog` | `true` | Keep rsyslog. False purges it and deletes its log files |
 | `server_baseline_timezone` | `""` | Time zone, such as `Europe/Berlin` |
 | `server_baseline_sudo_timestamp_timeout` | Not set | Minutes sudo remembers a password. Installs sudo |
@@ -80,8 +81,8 @@ and settings as they are.
         server_baseline_domain: example.com
         server_baseline_nameservers: [192.0.2.53, 192.0.2.54]
         server_baseline_timezone: Europe/Berlin
+        server_baseline_journald_storage: volatile
         server_baseline_journald:
-          Storage: volatile
           ForwardToSyslog: false
           ForwardToWall: false
         server_baseline_rsyslog: false
@@ -114,14 +115,21 @@ skipped.
 
 ## Logging
 
-`server_baseline_journald` goes in
-`/etc/systemd/journald.conf.d/90-server-baseline.conf`, which overrides
+`server_baseline_journald_storage`, as `Storage`, and `server_baseline_journald`
+go in `/etc/systemd/journald.conf.d/90-server-baseline.conf`, which overrides
 `/etc/systemd/journald.conf`, and journald restarts when it changes. Booleans
-become `yes` and `no`. The file is removed when the setting is empty.
+become `yes` and `no`. The file is removed when both settings are empty.
 
-With `Storage` set to `volatile` or `none`, the journal is kept in memory only, and
-the role deletes the persistent journal in `/var/log/journal`. journald doesn't do
-that itself, and journalctl would keep showing the old entries.
+The storage is a setting of its own so that one host can keep its journal on disk,
+with `server_baseline_journald_storage: persistent` in its host variables, while
+its group keeps it in memory.
+
+With `volatile` or `none`, the journal is kept in memory only, and the role deletes
+the persistent journal in `/var/log/journal`. journald doesn't do that itself, and
+journalctl would keep showing the old entries.
+
+A file in `/etc/systemd/journald.conf.d` that sorts after the role's file can still
+override it.
 
 With `server_baseline_rsyslog: false`, the role purges rsyslog and deletes the
 files it wrote in `/var/log`, such as `syslog`, `auth.log` and `kern.log`, with

@@ -64,13 +64,16 @@ server_baseline_sysctl:
   net.ipv4.conf.all.send_redirects: 0
   net.ipv4.conf.default.send_redirects: 0
 
-# Settings for the [Journal] section of
-# /etc/systemd/journald.conf.d/90-server-baseline.conf, such as Storage: volatile.
-# With Storage volatile or none, the persistent journal is deleted. The file is
-# removed when empty.
+# Where journald keeps the journal: volatile, persistent, auto or none. With
+# volatile or none, the persistent journal is deleted. Not managed when empty.
+server_baseline_journald_storage: ""
+
+# Other settings for the [Journal] section of
+# /etc/systemd/journald.conf.d/90-server-baseline.conf. The file is removed when
+# these and the storage are empty.
 server_baseline_journald: {}
-#  Storage: volatile
 #  ForwardToSyslog: false
+#  MaxRetentionSec: 1month
 
 # Keep rsyslog. False purges it and deletes its log files in /var/log, leaving
 # the journal as the only log.

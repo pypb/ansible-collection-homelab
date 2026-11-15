@@ -1,5 +1,5 @@
 # {{ ansible_managed }}
 [Journal]
-{% for key, value in server_baseline_journald | dictsort %}
+{% for key, value in __server_baseline_journald | dictsort %}
 {{ key }}={{ ('yes' if value else 'no') if value is boolean else value }}
 {% endfor %}

@@ -15,7 +15,9 @@
       - server_baseline_grub_terminals | reject('match', '^[a-z_]+$') | length == 0
       - server_baseline_grub_serial_command is match('^[A-Za-z0-9 =,._-]+$')
       - not (server_baseline_tmp_tmpfs | bool and __server_baseline_ubuntu | bool)
+      - server_baseline_journald_storage in ['', 'volatile', 'persistent', 'auto', 'none']
       - server_baseline_journald.keys() | reject('match', '^[A-Za-z]+$') | length == 0
+      - "'Storage' not in server_baseline_journald"
       - server_baseline_journald.values() | map('string') | select('search', '\n') | length == 0
     fail_msg: >-
       This role supports Debian and Ubuntu only. A package can't be both installed and
@@ -24,7 +26,8 @@
       ttyS0,115200n8, server_baseline_grub_terminals GRUB terminal names, and
       server_baseline_grub_serial_command letters, digits, spaces and =,._-.
       server_baseline_tmp_tmpfs is for Debian only, since Ubuntu doesn't ship tmp.mount.
-      server_baseline_journald takes journald.conf option names, and values on one line.
+      server_baseline_journald_storage must be volatile, persistent, auto or none, and
+      server_baseline_journald takes the other journald.conf options, with values on one line.
     quiet: true
 
 - name: Manage packages

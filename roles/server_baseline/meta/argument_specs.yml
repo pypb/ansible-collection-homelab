@@ -94,14 +94,21 @@ argument_specs:
           net.ipv4.conf.all.send_redirects: 0
           net.ipv4.conf.default.send_redirects: 0
         description: Sysctl settings. The default ignores and sends no ICMP redirects.
+      server_baseline_journald_storage:
+        type: str
+        default: ""
+        choices: ["", volatile, persistent, auto, none]
+        description:
+          - Where journald keeps the journal, its C(Storage) setting. Not managed when empty.
+          - With C(volatile) or C(none), the persistent journal in C(/var/log/journal) is deleted.
+          - A setting of its own, so that a host can override it without repeating O(server_baseline_journald).
       server_baseline_journald:
         type: dict
         default: {}
         description:
-          - Settings for the C([Journal]) section of C(/etc/systemd/journald.conf.d/90-server-baseline.conf), such as C(Storage=volatile).
-          - Booleans become C(yes) and C(no).
-          - With C(Storage) set to C(volatile) or C(none), the persistent journal in C(/var/log/journal) is deleted.
-          - The file is removed when empty.
+          - Other settings for the C([Journal]) section of C(/etc/systemd/journald.conf.d/90-server-baseline.conf), such as C(ForwardToSyslog).
+          - C(Storage) goes in O(server_baseline_journald_storage). Booleans become C(yes) and C(no).
+          - The file is removed when this and O(server_baseline_journald_storage) are empty.
       server_baseline_rsyslog:
         type: bool
         default: true

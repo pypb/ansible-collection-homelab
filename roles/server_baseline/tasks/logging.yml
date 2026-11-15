@@ -6,7 +6,7 @@
     group: root
     mode: "0755"
     state: directory
-  when: server_baseline_journald | length > 0
+  when: __server_baseline_journald | length > 0
 
 - name: Write the journald settings
   ansible.builtin.template:
@@ -16,14 +16,14 @@
     group: root
     mode: "0644"
   notify: Restart journald
-  when: server_baseline_journald | length > 0
+  when: __server_baseline_journald | length > 0
 
 - name: Remove the journald settings
   ansible.builtin.file:
     path: "{{ __server_baseline_journald_dropin }}"
     state: absent
   notify: Restart journald
-  when: server_baseline_journald | length == 0
+  when: __server_baseline_journald | length == 0
 
 # journald doesn't remove it when it stops writing there, and journalctl still reads it.
 - name: Find the persistent journal
