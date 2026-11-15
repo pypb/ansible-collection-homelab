@@ -13,7 +13,8 @@ migrated into `roles/`.
     server with DNS-01, installing them anywhere, including Unifi keystores
   - `ubuntu_k3s_node`: strips Ubuntu down to a minimal k3s node, with sysctl, NFS,
     mount watchdogs, Cilium prerequisites, stopping pods at shutdown and the k3s
-    server's PSA and audit files
+    server's PSA and audit files, plus a `reboot` entry point that leaves the
+    cluster cleanly
   - `ocfs2`: sets up the OCFS2 cluster file system with o2cb, and its mounts
   - `iscsi_initiator`: sets up open-iscsi and logs in to targets, with optional multipathd
   - `server_baseline`: basic configuration of a Debian or Ubuntu server, including
@@ -40,6 +41,8 @@ migrated into `roles/`.
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and
     `ocfs2`, one node at a time
+  - `upgrade`: installs all pending upgrades one host at a time, rebooting through
+    the `ubuntu_k3s_node` role's `reboot` entry point
 - Plugins: none yet
 
 Update these lists, and the matching sections of `README.md`, when content is

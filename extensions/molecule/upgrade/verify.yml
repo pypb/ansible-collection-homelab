@@ -1,0 +1,23 @@
+---
+- name: Verify upgrade
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Simulate another upgrade
+      ansible.builtin.command:
+        argv: [apt-get, --simulate, upgrade]
+      register: __molecule_upgrade
+      changed_when: false
+
+    - name: Check that nothing is left to upgrade
+      ansible.builtin.assert:
+        that: __molecule_upgrade['stdout'] is search('^0 upgraded', multiline=True)
+        fail_msg: "{{ __molecule_upgrade['stdout_lines'] }}"
+
+    # Read-only, and nothing to wait for without k3s.
+    - name: Run the reboot entry point in check mode
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+        tasks_from: reboot.yml
+        apply:
+          check_mode: true

@@ -95,11 +95,10 @@ next one. Set `ubuntu_k3s_node_k3s_service` when the k3s unit isn't called
 [`iscsi_initiator`](../iscsi_initiator/README.md) role, and with
 `ubuntu_k3s_node_ocfs2` set, the [`ocfs2`](#ocfs2) role.
 
-With `ubuntu_k3s_node_reboot` set, it also reboots each node. Before the reboot, it
-stops k3s and its pods with `ubuntu_k3s_node_k3s_killall` and, with
-`ubuntu_k3s_node_ocfs2` set, unmounts `ocfs2_mounts`, so that the node leaves the
-OCFS2 cluster cleanly. If a file system is still busy, the play fails and the node
-isn't rebooted. It doesn't drain nodes, so the pods stop without being moved.
+With `ubuntu_k3s_node_reboot` set, it also reboots each node through the
+[`reboot` entry point](#rebooting), unmounting `ocfs2_mounts` first when
+`ubuntu_k3s_node_ocfs2` is set. The
+[`pypb.homelab.upgrade`](../../playbooks/upgrade.yml) playbook reboots the same way.
 
 Try it on one node in check mode first, then for real:
 
@@ -112,6 +111,40 @@ ansible-playbook pypb.homelab.ubuntu_k3s_node -e ubuntu_k3s_node_hosts=k3s_nodes
 
 The wait uses the host's kernel host name as the node name. Set
 `ubuntu_k3s_node_name` if k3s runs with `--node-name`.
+
+## Rebooting
+
+The `reboot` entry point reboots a node so that it leaves the cluster cleanly. When
+`ubuntu_k3s_node_k3s_service` is loaded, it stops k3s and its pods with
+`ubuntu_k3s_node_k3s_killall`. It then unmounts `ubuntu_k3s_node_reboot_unmount_paths`,
+such as OCFS2 file systems, and reboots. If a file system is still busy, the play
+fails and the node isn't rebooted. Afterwards, on servers that run k3s, it waits for
+the node to be Ready. It doesn't drain nodes, so the pods stop without being moved.
+On a host without k3s and without file systems to unmount, it's a plain reboot.
+Unlike the main entry point, it also works on Debian.
+
+The `wait` entry point only waits for a server node to be Ready, for up to 5 minutes.
+
+```yaml
+- name: Reboot the node
+  ansible.builtin.include_role:
+    name: pypb.homelab.ubuntu_k3s_node
+    tasks_from: reboot.yml
+  vars:
+    ubuntu_k3s_node_server: true
+    ubuntu_k3s_node_reboot_unmount_paths:
+      - /srv/shared
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `ubuntu_k3s_node_reboot_unmount_paths` | `[]` | Mount points to unmount before rebooting |
+| `ubuntu_k3s_node_reboot_msg` | `Reboot initiated by Ansible` | Message shown to logged-in users |
+| `ubuntu_k3s_node_post_reboot_delay` | `0` | Seconds to wait after the host is back, before checking it |
+| `ubuntu_k3s_node_name` | The kernel host name | The node name k3s registers, if k3s runs with `--node-name` |
+
+`ubuntu_k3s_node_server`, `ubuntu_k3s_node_k3s_service` and
+`ubuntu_k3s_node_k3s_killall` work as for the main entry point.
 
 ## Removed packages
 

@@ -1,0 +1,12 @@
+---
+# Only Debian asks for a reboot, so that the check run takes the reboot path there
+# and skips it on Ubuntu.
+- name: Ask for a reboot
+  hosts: upgrade-debian13
+  gather_facts: false
+  tasks:
+    - name: Create the reboot request
+      ansible.builtin.copy:
+        content: "*** System restart required ***\n"
+        dest: /run/reboot-required
+        mode: "0644"

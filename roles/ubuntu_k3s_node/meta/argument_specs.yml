@@ -156,3 +156,61 @@ argument_specs:
         elements: str
         default: [kube-system]
         description: Namespaces that Pod Security Admission doesn't check.
+  reboot:
+    short_description: Reboot a k3s node, leaving the cluster cleanly.
+    description:
+      - Stops k3s and its pods when k3s is installed, unmounts the listed file systems, and reboots.
+      - A file system that is still busy fails the play, and the node isn't rebooted.
+      - On servers that run k3s, waits for the node to be Ready afterwards.
+      - Doesn't drain the node, so the pods stop without being moved.
+      - On a host without k3s and without file systems to unmount, it's a plain reboot.
+    author:
+      - pypb
+    options:
+      ubuntu_k3s_node_server:
+        type: bool
+        default: false
+        description: Wait for the node to be Ready after the reboot. Agents have no kubeconfig to check it with.
+      ubuntu_k3s_node_k3s_service:
+        type: str
+        default: k3s.service
+        description: The k3s unit. k3s is only stopped, and waited for, when it's loaded.
+      ubuntu_k3s_node_k3s_killall:
+        type: path
+        default: /usr/local/bin/k3s-killall.sh
+        description: The script that stops k3s and its pods.
+      ubuntu_k3s_node_reboot_unmount_paths:
+        type: list
+        elements: path
+        default: []
+        description: Mount points to unmount before rebooting, such as OCFS2 file systems.
+      ubuntu_k3s_node_reboot_msg:
+        type: str
+        default: Reboot initiated by Ansible
+        description: The message shown to logged-in users before the reboot.
+      ubuntu_k3s_node_post_reboot_delay:
+        type: int
+        default: 0
+        description: Seconds to wait after the host is back, before checking it.
+      ubuntu_k3s_node_name:
+        type: str
+        description: The node name k3s registers. Defaults to the host's kernel host name. Set it if k3s runs with C(--node-name).
+  wait:
+    short_description: Wait for a k3s server node to be Ready.
+    description:
+      - On servers that run k3s, waits up to 5 minutes for the node to be Ready.
+      - Does nothing on agents, which have no kubeconfig, or before k3s is installed.
+    author:
+      - pypb
+    options:
+      ubuntu_k3s_node_server:
+        type: bool
+        default: false
+        description: Wait for the node. Agents have no kubeconfig to check it with.
+      ubuntu_k3s_node_k3s_service:
+        type: str
+        default: k3s.service
+        description: The k3s unit. The wait only happens when it's loaded.
+      ubuntu_k3s_node_name:
+        type: str
+        description: The node name k3s registers. Defaults to the host's kernel host name. Set it if k3s runs with C(--node-name).

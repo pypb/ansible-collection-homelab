@@ -1,0 +1,65 @@
+---
+# Installs every pending upgrade, not only the security ones that
+# unattended-upgrades installs, and reboots the hosts that need it. One host at a
+# time, stopping at the first failure, so that clustered services keep running.
+#
+# The reboot goes through the ubuntu_k3s_node role's reboot entry point. On k3s
+# nodes, it stops k3s and its pods and unmounts OCFS2 first, and waits for servers
+# to be Ready before the next host. On other hosts, it's a plain reboot.
+- name: Upgrade servers one at a time
+  hosts: "{{ upgrade_hosts | default('servers') }}"
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  tasks:
+    - name: Check the distribution
+      ansible.builtin.assert:
+        that: ansible_facts['os_family'] == 'Debian'
+        fail_msg: This playbook supports Debian and Ubuntu only.
+        quiet: true
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: safe
+        update_cache: true
+        cache_valid_time: "{{ upgrade_cache_valid_time | default(3600) }}"
+      notify: Empty the package cache
+
+    # Package scripts create it, such as the kernel hook of unattended-upgrades.
+    - name: Look for a reboot request
+      ansible.builtin.stat:
+        path: /run/reboot-required
+      register: __upgrade_reboot_required
+
+    # Without update-notifier-common, only new kernels ask for a reboot, and not on
+    # every host, so compare the running kernel with the newest one too.
+    - name: Find the installed kernels
+      ansible.builtin.find:
+        paths: /lib/modules
+        file_type: directory
+      register: __upgrade_kernels
+
+    - name: Reboot
+      ansible.builtin.include_role:
+        name: pypb.homelab.ubuntu_k3s_node
+        tasks_from: reboot.yml
+      vars:
+        ubuntu_k3s_node_reboot_msg: Rebooting after upgrades
+        ubuntu_k3s_node_post_reboot_delay: "{{ upgrade_post_reboot_delay | default(30) }}"
+        ubuntu_k3s_node_reboot_unmount_paths: >-
+          {{ (ocfs2_mounts | default([]) | map(attribute='path') | list)
+             if (ubuntu_k3s_node_ocfs2 | default(false) | bool) else [] }}
+        __upgrade_newest_kernel: >-
+          {{ __upgrade_kernels['files'] | map(attribute='path') | map('basename')
+             | community.general.version_sort | last | default('') }}
+      when:
+        - upgrade_reboot | default(true) | bool
+        - >-
+          __upgrade_reboot_required['stat']['exists']
+          or (__upgrade_newest_kernel | length > 0
+              and __upgrade_newest_kernel != ansible_facts['kernel'])
+
+  handlers:
+    - name: Empty the package cache
+      ansible.builtin.apt:
+        clean: true

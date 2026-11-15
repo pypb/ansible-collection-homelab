@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - upgrade - new playbook that installs every pending upgrade on Debian and Ubuntu,
+    one host at a time, and reboots the hosts that need it. k3s nodes leave the
+    cluster cleanly before the reboot, and servers are Ready before the next host.
+  - ubuntu_k3s_node - new reboot entry point that stops k3s and its pods, unmounts
+    the listed file systems, reboots and waits for servers to be Ready, and a wait
+    entry point that only waits. The ubuntu_k3s_node playbook uses them.

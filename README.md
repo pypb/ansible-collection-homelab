@@ -32,7 +32,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
 | [`pypb.homelab.acme_certificates`](roles/acme_certificates/README.md) | Trusts private CAs, and requests certificates from an ACME server with DNS-01 and installs them anywhere, including Unifi keystores | Debian 12 and 13, Ubuntu 24.04 and 26.04 |
-| [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up sysctl, NFS, mount watchdogs, Cilium prerequisites, stopping pods at shutdown and the k3s server's PSA and audit files | Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up sysctl, NFS, mount watchdogs, Cilium prerequisites, stopping pods at shutdown and the k3s server's PSA and audit files. Its `reboot` entry point reboots a node so that it leaves the cluster cleanly | Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.iscsi_initiator`](roles/iscsi_initiator/README.md) | Sets up open-iscsi and logs in to targets now and at boot, with a disk timeout for chosen vendors and optional multipathd | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.server_baseline`](roles/server_baseline/README.md) | Basic server configuration: packages, the Ubuntu mirror, the host's domain, a static resolv.conf, sysctl, journald and rsyslog, time zone, sudo, motd and banners, and the kernel consoles and GRUB menu | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.server_hardening`](roles/server_hardening/README.md) | Hardening beyond the baseline: sysctl, blocked kernel modules, masked services, purged packages, wifi and bluetooth, core dumps and idle shell timeouts | Debian 13, Ubuntu 24.04 and 26.04 |
@@ -119,6 +119,29 @@ ansible-playbook pypb.homelab.ubuntu_k3s_node -e ubuntu_k3s_node_hosts=k3s_nodes
 The playbook targets the hosts in `ubuntu_k3s_node_hosts`, which defaults to the
 `k3s_nodes` group rather than `all`, since the role purges packages. See [Rolling out](roles/ubuntu_k3s_node/README.md#rolling-out).
 
+| Playbook | Description |
+|---|---|
+| [`pypb.homelab.upgrade`](playbooks/upgrade.yml) | Installs every pending upgrade on Debian and Ubuntu, one host at a time, and reboots the hosts that ask for it or run an older kernel than the newest installed one. k3s nodes leave the cluster cleanly first |
+
+```shell
+ansible-playbook pypb.homelab.upgrade
+ansible-playbook pypb.homelab.upgrade --limit host1 -e upgrade_reboot=false
+```
+
+The playbook targets the hosts in `upgrade_hosts`, which defaults to the `servers`
+group. It stops at the first host that fails. It reboots through the
+`ubuntu_k3s_node` role's [`reboot` entry point](roles/ubuntu_k3s_node/README.md#rebooting),
+so on a k3s node it stops k3s and its pods, unmounts `ocfs2_mounts` when
+`ubuntu_k3s_node_ocfs2` is true, and waits for servers to be Ready before the next
+host. On other hosts it's a plain reboot.
+
+| Variable | Default | Description |
+|---|---|---|
+| `upgrade_hosts` | `servers` | Hosts to upgrade |
+| `upgrade_reboot` | `true` | Reboot the hosts that need it |
+| `upgrade_cache_valid_time` | `3600` | Seconds the package lists stay valid before they're updated |
+| `upgrade_post_reboot_delay` | `30` | Seconds to wait after a host is back, before checking it |
+
 ### Plugins
 
 None yet.
@@ -166,6 +189,7 @@ molecule test --scenario-name fail2ban
 molecule test --scenario-name wireguard
 molecule test --scenario-name haproxy
 molecule test --scenario-name site
+molecule test --scenario-name upgrade
 ```
 
 The molecule scenarios need Docker, or Podman with its API socket enabled and
