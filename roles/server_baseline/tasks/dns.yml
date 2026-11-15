@@ -64,6 +64,7 @@
   ansible.builtin.file:
     path: /etc/resolv.conf
     attributes: -i
+  changed_when: false
   when:
     - "'immutable' in __server_baseline_resolv['stat']['attributes'] | default([])"
     - __server_baseline_resolv_pending is changed or not server_baseline_resolv_conf_immutable | bool
@@ -81,6 +82,7 @@
   ansible.builtin.file:
     path: /etc/resolv.conf
     attributes: +i
+  changed_when: false
   when:
     - server_baseline_resolv_conf_immutable | bool
     - not (ansible_check_mode and __server_baseline_resolv['stat']['islnk'] | default(false))
