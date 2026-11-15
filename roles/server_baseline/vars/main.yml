@@ -42,6 +42,8 @@ __server_baseline_journald: >-
      | combine({'Storage': server_baseline_journald_storage} if server_baseline_journald_storage | length > 0 else {}) }}
 __server_baseline_journald_volatile: "{{ server_baseline_journald_storage in ['volatile', 'none'] }}"
 
+__server_baseline_coredump_dropin: /etc/systemd/coredump.conf.d/90-server-baseline.conf
+
 # The files Debian's and Ubuntu's rsyslog configurations write, with their rotations.
 __server_baseline_rsyslog_logs:
   - auth.log*

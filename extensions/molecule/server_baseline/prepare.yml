@@ -112,3 +112,14 @@
         - /var/log/syslog.1
         - /var/log/auth.log.2.gz
         - /var/log/journal/0123456789abcdef0123456789abcdef/system.journal
+
+    - name: Write a file for the role to change the mode of
+      ansible.builtin.copy:
+        content: "mode\n"
+        dest: /etc/molecule-mode
+        mode: "0644"
+
+    - name: Open up /root
+      ansible.builtin.file:
+        path: /root
+        mode: "0755"

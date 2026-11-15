@@ -10,11 +10,14 @@
 
 - name: Write the journald settings
   ansible.builtin.template:
-    src: journald.conf.j2
+    src: systemd-dropin.conf.j2
     dest: "{{ __server_baseline_journald_dropin }}"
     owner: root
     group: root
     mode: "0644"
+  vars:
+    __server_baseline_dropin_section: Journal
+    __server_baseline_dropin_settings: "{{ __server_baseline_journald }}"
   notify: Restart journald
   when: __server_baseline_journald | length > 0
 

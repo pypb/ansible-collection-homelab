@@ -33,6 +33,23 @@
         server_baseline_vim_disable_mouse: true
         server_baseline_tmp_tmpfs: "{{ inventory_hostname == 'baseline-debian13' }}"
         server_baseline_motd_news: false
+        server_baseline_masked_units: [ctrl-alt-del.target, debug-shell.service]
+        server_baseline_login_defs:
+          UMASK: "027"
+          ENCRYPT_METHOD: YESCRYPT
+          LOG_OK_LOGINS: true
+        server_baseline_coredump:
+          Storage: none
+          ProcessSizeMax: 0
+        server_baseline_file_modes:
+          - path: /root
+            mode: "0700"
+          - path: /etc/molecule-mode
+            mode: "0600"
+            owner: root
+            group: root
+          - path: /etc/molecule-missing
+            mode: "0600"
         server_baseline_motd: ""
         server_baseline_issue: "Authorised use only.\n"
         server_baseline_issue_net: "Authorised use only.\n"

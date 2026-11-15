@@ -5,6 +5,7 @@ minor_changes:
     mirror, sets the host's domain name in /etc/hosts and /etc/mailname, and can
     write a static, immutable resolv.conf. It sets sysctl settings, the time zone,
     the sudo password timeout, vim's mouse, /tmp as tmpfs and Ubuntu's motd-news,
-    sets journald settings and can purge rsyslog and its log files, writes the
+    sets journald settings and can purge rsyslog and its log files, masks systemd
+    units, sets login.defs and coredump settings and the modes of files, writes the
     message of the day and login banners, and sets the kernel consoles and the GRUB
     menu, or the consoles on a Raspberry Pi's kernel command line.
