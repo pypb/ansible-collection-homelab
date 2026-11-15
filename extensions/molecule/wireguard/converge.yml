@@ -1,0 +1,21 @@
+---
+- name: Converge a mesh of three hosts
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the container's address
+      ansible.builtin.setup:
+        gather_subset: [network]
+        filter: [ansible_default_ipv4]
+
+    - name: Set up WireGuard
+      ansible.builtin.include_role:
+        name: pypb.homelab.wireguard
+      vars:
+        # A gateway behind a dynamic address, which connects to this host.
+        wireguard_peers:
+          - name: gateway
+            public_key: 0n3T38Qa1thLIMEVDGeNK8yD76u6Gp/Ugcuz9ldRvlE=
+            allowed_ips: [10.99.0.254/32, 192.0.2.0/24]
+        wireguard_mesh_peers: "{{ groups['targets'] | map('community.general.dict_kv', 'host') }}"
+        wireguard_ip_forward: true

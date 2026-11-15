@@ -1,0 +1,117 @@
+---
+argument_specs:
+  main:
+    short_description: Sets up a WireGuard interface with wg-quick.
+    description:
+      - Installs WireGuard's tools, generates a key pair on the host if it has none, and writes C(/etc/wireguard/<interface>.conf) for C(wg-quick@<interface>).
+      - The private key stays in C(/etc/wireguard/privatekey) and is never read by Ansible.
+      - Peers are either listed, or hosts of the inventory to mesh with, whose public keys are read from them.
+      - A change of peers is applied with a reload, which keeps the sessions of the other peers. A change of address restarts the interface.
+      - Optionally registers the host as a peer of a WireGuard instance on an OPNsense firewall, through its API.
+    author:
+      - pypb
+    options:
+      wireguard_interface:
+        type: str
+        default: wg0
+        description: Name of the interface.
+      wireguard_addresses:
+        type: list
+        elements: str
+        required: true
+        description:
+          - Addresses of the interface with their prefix length, such as C(10.0.0.2/24).
+          - Write IPv6 addresses in their shortest form, as C(ip address) shows them, or the role restarts the interface on every run.
+      wireguard_port:
+        type: int
+        default: 51820
+        description: UDP port to listen on.
+      wireguard_peers:
+        type: list
+        elements: dict
+        default: []
+        description: Peers that aren't hosts of the inventory, such as a gateway.
+        options:
+          name:
+            type: str
+            description: A comment in the configuration.
+          public_key:
+            type: str
+            required: true
+            description: Public key of the peer.
+          allowed_ips:
+            type: list
+            elements: str
+            required: true
+            description: Addresses and networks routed to the peer.
+          endpoint:
+            type: str
+            description:
+              - C(host:port) to connect to.
+              - Leave it out for a peer that connects to this host, such as one behind a dynamic address. That peer then sends the keepalives.
+          persistent_keepalive:
+            type: int
+            default: 0
+            description: Seconds between keepalives to the peer, or 0 for none.
+      wireguard_mesh_peers:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - Hosts of the inventory to mesh with, which run this role too.
+          - Their public keys are read from them, and their C(wireguard_addresses) are routed to them. A peer without a key yet is left out until the next run.
+          - This host itself is skipped, so the same list can serve a whole group.
+        options:
+          host:
+            type: str
+            required: true
+            description: Inventory hostname of the peer.
+          endpoint:
+            type: str
+            description:
+              - Address or hostname to reach the peer on, without the port, which is the peer's C(wireguard_port).
+              - Defaults to the peer's C(wireguard_mesh_endpoint), then to its inventory hostname.
+      wireguard_mesh_persistent_keepalive:
+        type: int
+        default: 0
+        description: Seconds between keepalives to mesh peers, or 0 for none.
+      wireguard_ip_forward:
+        type: bool
+        default: false
+        description:
+          - Forwards packets between interfaces, to route between the tunnel and other networks.
+          - Sets C(net.ipv4.ip_forward), and C(net.ipv6.conf.all.forwarding) with an IPv6 address. False leaves them as they are.
+      wireguard_opnsense:
+        type: dict
+        default: {}
+        description:
+          - Registers the host as a peer of a WireGuard instance on an OPNsense firewall, through its API. Empty to skip.
+          - The peer is found by its public key, then by its name, and only updated when it differs. The firewall's WireGuard service is then reconfigured.
+        options:
+          host:
+            type: str
+            description: Address or hostname of the firewall. Required.
+          api_key:
+            type: str
+            description: API key. Required.
+          api_secret:
+            type: str
+            no_log: true
+            description: API secret. Required.
+          instance:
+            type: str
+            description: Name of the WireGuard instance. Required.
+          name:
+            type: str
+            description: Name of the peer. Defaults to the short inventory hostname.
+          endpoint:
+            type: str
+            description: Address the firewall connects to. Defaults to the address of the default IPv4 route.
+          keepalive:
+            type: int
+            default: 25
+            description: Seconds between keepalives from the firewall, or 0 for none. Keeps the tunnel up from a firewall behind a dynamic address.
+          validate_certs:
+            type: bool
+            default: true
+            description: Validate the firewall's certificate.

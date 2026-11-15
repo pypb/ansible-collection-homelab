@@ -1,0 +1,23 @@
+---
+__wireguard_dir: /etc/wireguard
+__wireguard_private_key: "{{ __wireguard_dir }}/privatekey"
+__wireguard_public_key: "{{ __wireguard_dir }}/publickey"
+__wireguard_service: "wg-quick@{{ wireguard_interface }}"
+
+__wireguard_mesh_peers: "{{ wireguard_mesh_peers | rejectattr('host', 'eq', inventory_hostname) }}"
+
+# Mesh peers that have a key, and are in the configuration
+__wireguard_mesh_present: >-
+  {{ __wireguard_mesh_keys['results'] | selectattr('content', 'defined') | map(attribute='item')
+     | map(attribute='host') | list }}
+
+# All allowed IPs, written as wg shows them, with the prefix length of a host
+__wireguard_allowed_ips: >-
+  {{ (wireguard_peers | map(attribute='allowed_ips') | flatten
+      + __wireguard_mesh_present | map('extract', hostvars, 'wireguard_addresses') | flatten
+        | map('regex_replace', '/.*$', ''))
+     | map('regex_replace', '^([^/:]*)$', '\1/32') | map('regex_replace', '^([^/]*:[^/]*)$', '\1/128')
+     | map('lower') | list }}
+
+__wireguard_opnsense_url: "https://{{ wireguard_opnsense['host'] | default('') }}/api/wireguard"
+__wireguard_opnsense_name: "{{ wireguard_opnsense['name'] | default(inventory_hostname_short) }}"
