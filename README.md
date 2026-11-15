@@ -31,6 +31,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.smtp_client`](roles/smtp_client/README.md) | Sets up msmtp as the sendmail and SMTP client of a server, with mail aliases | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.restic_backup`](roles/restic_backup/README.md) | Installs and configures restic and resticprofile for scheduled backups | Debian 13, Ubuntu 24.04 and 26.04, Raspberry Pi OS (trixie-based) |
 | [`pypb.homelab.restic_server_users`](roles/restic_server_users/README.md) | Manages user logins on a containerised rest-server | Any Linux |
+| [`pypb.homelab.restic_k8up_users`](roles/restic_k8up_users/README.md) | Gives the k8up backup Schedules of a cluster their own rest-server logins, with their credential Secrets | Any Linux |
 | [`pypb.homelab.acme_certificates`](roles/acme_certificates/README.md) | Trusts private CAs, and requests certificates from an ACME server with DNS-01 and installs them anywhere, including Unifi keystores | Debian 12 and 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ubuntu_k3s_node`](roles/ubuntu_k3s_node/README.md) | Strips Ubuntu down to a minimal k3s node, and sets up sysctl, NFS, mount watchdogs, Cilium prerequisites, stopping pods at shutdown and the k3s server's PSA and audit files. Its `reboot` entry point reboots a node so that it leaves the cluster cleanly | Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.iscsi_initiator`](roles/iscsi_initiator/README.md) | Sets up open-iscsi and logs in to targets now and at boot, with a disk timeout for chosen vendors and optional multipathd | Debian 13, Ubuntu 24.04 and 26.04 |
@@ -124,6 +125,29 @@ The playbook targets the hosts in `ubuntu_k3s_node_hosts`, which defaults to the
 
 | Playbook | Description |
 |---|---|
+| [`pypb.homelab.k3s_cluster`](playbooks/k3s_cluster.yml) | Sets up one k3s cluster: the `ubuntu_k3s_node` playbook, then k3s with `xanmanning.k3s`, then the rest-server logins of its k8up backups with `restic_k8up_users` |
+
+```shell
+ansible-playbook pypb.homelab.k3s_cluster
+ansible-playbook pypb.homelab.k3s_cluster --tags k3s
+ansible-playbook pypb.homelab.k3s_cluster -e k3s_cluster_hosts=cluster2
+```
+
+The playbook targets the hosts in `k3s_cluster_hosts`, which defaults to the
+`k3s_cluster` group, and should be one cluster's nodes, since `xanmanning.k3s`
+builds a cluster from them. Its steps run in this order:
+
+| Tag | Step | Runs on |
+|---|---|---|
+| `ubuntu_k3s_node` | The [`pypb.homelab.ubuntu_k3s_node`](playbooks/ubuntu_k3s_node.yml) playbook | One node at a time |
+| `k3s` | `xanmanning.k3s`, configured with its own `k3s_*` variables | All nodes together |
+| `restic_k8up_users` | `pypb.homelab.restic_k8up_users` | The first node, when `restic_k8up_users_enable` is true there |
+
+`xanmanning.k3s` is listed in `requirements.yml`. It's included when it runs, so
+it only has to be installed for the `k3s` step.
+
+| Playbook | Description |
+|---|---|
 | [`pypb.homelab.upgrade`](playbooks/upgrade.yml) | Installs every pending upgrade on Debian and Ubuntu, one host at a time, and reboots the hosts that ask for it or run an older kernel than the newest installed one. k3s nodes leave the cluster cleanly first |
 
 ```shell
@@ -156,8 +180,9 @@ defined in your inventory.
 
 | Variable | Used by | Description |
 |---|---|---|
-| `restic_server_hostname` | `restic_server_users` | Host running the rest-server container |
-| `restic_server_container` | `restic_server_users` | Name of the rest-server container |
+| `restic_server_hostname` | `restic_server_users`, `restic_k8up_users` | Host running the rest-server container |
+| `restic_server_container` | `restic_server_users`, `restic_k8up_users` | Name of the rest-server container |
+| `restic_backup_repo_url` | `restic_k8up_users` | Also `restic_backup`'s own variable. Its host is the rest-server's |
 
 ## Development
 
@@ -175,6 +200,7 @@ ansible-galaxy collection build
 
 cd extensions
 molecule test --scenario-name restic_server_users
+molecule test --scenario-name restic_k8up_users
 molecule test --scenario-name restic_backup
 molecule test --scenario-name smtp_client
 molecule test --scenario-name acme_certificates

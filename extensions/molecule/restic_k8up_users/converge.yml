@@ -1,0 +1,8 @@
+---
+- name: Converge
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Manage the rest-server users of k8up
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_k8up_users

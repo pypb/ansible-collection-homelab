@@ -1,0 +1,69 @@
+---
+- name: Prepare rest-server and the cluster's Schedules
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Start rest-server container
+      community.docker.docker_container:
+        name: molecule-k8up-rest-server
+        image: docker.io/restic/rest-server:0.14.0
+        state: started
+        published_ports:
+          - 127.0.0.1:18001:8000
+
+    - name: Wait for rest-server
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18001/
+        status_code: 401
+      register: __molecule_rest_server
+      until: __molecule_rest_server['status'] == 401
+      retries: 30
+      delay: 1
+
+    - name: Create a user without a Schedule
+      ansible.builtin.include_role:
+        name: pypb.homelab.restic_server_users
+      vars:
+        restic_server_users_list:
+          - name: k8up-test-orphan
+
+    - name: Create the cluster's state directory
+      ansible.builtin.file:
+        path: "{{ __molecule_state }}"
+        state: directory
+        mode: "0700"
+
+    # Two use the rest-server, one uses another rest-server and one S3.
+    - name: Write the Schedules
+      ansible.builtin.copy:
+        content: "{{ {'items': __molecule_schedules} | to_json }}"
+        dest: "{{ __molecule_state }}/schedules.json"
+        mode: "0600"
+      vars:
+        __molecule_schedules:
+          - metadata: {namespace: app1, name: backup}
+            spec:
+              backend:
+                rest:
+                  url: https://rest.example.test/k8up-test-app1/
+                  userSecretRef: {name: restic-rest, key: username}
+                  passwordSecretReg: {name: restic-rest, key: password}
+          - metadata: {namespace: app2, name: backup}
+            spec:
+              backend:
+                rest:
+                  url: https://rest.example.test/k8up-test-app2/repo
+                  userSecretRef: {name: creds, key: user.name}
+                  passwordSecretReg: {name: creds, key: user.password}
+          - metadata: {namespace: app3, name: backup}
+            spec:
+              backend:
+                rest:
+                  url: https://other.example.test/k8up-test-app3/
+                  userSecretRef: {name: restic-rest, key: username}
+                  passwordSecretReg: {name: restic-rest, key: password}
+          - metadata: {namespace: app4, name: backup}
+            spec:
+              backend:
+                s3:
+                  endpoint: https://s3.example.test

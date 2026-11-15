@@ -47,6 +47,7 @@ jobs:
         scenario:
           - restic_server_users
           - restic_backup
+          - restic_k8up_users
           - smtp_client
           - acme_certificates
           - ubuntu_k3s_node

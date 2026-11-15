@@ -1,0 +1,136 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - restic_k8up_users_kubectl | length > 0
+      - restic_k8up_users_server_host | length > 0
+    fail_msg: >-
+      restic_k8up_users_kubectl needs a command, and restic_k8up_users_server_host a
+      host name, or restic_backup_repo_url a rest URL to take it from.
+    quiet: true
+
+- name: List the k8up Schedules
+  ansible.builtin.command:
+    argv: "{{ restic_k8up_users_kubectl + ['get', 'schedules.k8up.io', '--all-namespaces', '--output', 'json'] }}"
+  register: __restic_k8up_users_schedules
+  changed_when: false
+  check_mode: false
+
+- name: Reset the credential Secrets
+  ansible.builtin.set_fact:
+    __restic_k8up_users_secrets: []
+
+# Each Schedule's user is the first path segment of its repository URL, which is
+# what rest-server's --private-repos requires.
+- name: Collect the Schedules that use the rest-server
+  ansible.builtin.set_fact:
+    __restic_k8up_users_secrets: >-
+      {{ __restic_k8up_users_secrets | union([{
+           'namespace': item['metadata']['namespace'],
+           'secret': item['spec']['backend']['rest']['userSecretRef']['name'],
+           'username_key': item['spec']['backend']['rest']['userSecretRef']['key'],
+           'password_key': item['spec']['backend']['rest']['passwordSecretReg']['key'],
+           'user': (item['spec']['backend']['rest']['url'] | urlsplit('path')).strip('/').split('/') | first,
+         }]) }}
+  loop: "{{ (__restic_k8up_users_schedules['stdout'] | from_json)['items'] }}"
+  loop_control:
+    label: "{{ item['metadata']['namespace'] }}/{{ item['metadata']['name'] }}"
+  when:
+    - item['spec']['backend']['rest']['url'] is defined
+    - (item['spec']['backend']['rest']['url'] | urlsplit('hostname')) == restic_k8up_users_server_host
+    - item['spec']['backend']['rest']['userSecretRef']['name'] is defined
+    # k8up's field really is spelled passwordSecretReg. The role writes both
+    # keys to one Secret.
+    - >-
+      item['spec']['backend']['rest']['passwordSecretReg']['name'] | default('')
+      == item['spec']['backend']['rest']['userSecretRef']['name']
+
+# Only the username is read, so passwords never reach Ansible's output.
+- name: Read the usernames in the credential Secrets
+  ansible.builtin.command:
+    argv: >-
+      {{ restic_k8up_users_kubectl
+         + ['get', 'secret', '--namespace', item['namespace'], item['secret'], '--ignore-not-found',
+            '--output', 'jsonpath={.data.' ~ (item['username_key'] | replace('.', '\.')) ~ '}'] }}
+  loop: "{{ __restic_k8up_users_secrets }}"
+  loop_control:
+    label: "{{ item['namespace'] }}/{{ item['secret'] }} ({{ item['user'] }})"
+  register: __restic_k8up_users_reads
+  changed_when: false
+  check_mode: false
+
+- name: Reset the users that need a new password
+  ansible.builtin.set_fact:
+    __restic_k8up_users_stale: []
+
+# A user whose Secret is missing, or holds another username because the
+# repository URL changed. One stale Secret resets the user's password, so every
+# Secret of that user is rewritten.
+- name: Find the users that need a new password
+  ansible.builtin.set_fact:
+    __restic_k8up_users_stale: "{{ __restic_k8up_users_stale | union([item['item']['user']]) }}"
+  loop: "{{ __restic_k8up_users_reads['results'] }}"
+  loop_control:
+    label: "{{ item['item']['namespace'] }}/{{ item['item']['secret'] }}"
+  when: (item['stdout'] | b64decode) != item['item']['user']
+
+# Also what check mode would do, since it can't run the commands below.
+- name: Report the users that get a new password
+  ansible.builtin.debug:
+    msg: "{{ __restic_k8up_users_stale }}"
+
+# Public, so that the report below finds the rest-server's host and container.
+- name: Set new passwords on the rest-server
+  ansible.builtin.include_role:
+    name: pypb.homelab.restic_server_users
+    public: true
+  vars:
+    restic_server_users_list: >-
+      {{ __restic_k8up_users_stale | map('community.general.dict_kv', 'name')
+         | map('combine', {'update_password': 'always'}) | list }}
+
+# Through stdin, so that the password doesn't show in the node's process list.
+- name: Write the credential Secrets
+  ansible.builtin.command:
+    argv: "{{ restic_k8up_users_kubectl + ['apply', '--filename', '-'] }}"
+    stdin: >-
+      {{ {'apiVersion': 'v1', 'kind': 'Secret', 'type': 'Opaque',
+          'metadata': {'name': item['secret'], 'namespace': item['namespace'],
+                       'labels': {'app.kubernetes.io/managed-by': __restic_k8up_users_label}},
+          'stringData': {item['username_key']: item['user'],
+                         item['password_key']: restic_server_users_generated[item['user']]}} | to_json }}
+  loop: "{{ __restic_k8up_users_secrets | selectattr('user', 'in', __restic_k8up_users_stale) }}"
+  loop_control:
+    label: "{{ item['namespace'] }}/{{ item['secret'] }} ({{ item['user'] }})"
+  register: __restic_k8up_users_apply
+  # In check mode, there is no output.
+  changed_when: "'unchanged' not in __restic_k8up_users_apply['stdout'] | default('')"
+  no_log: true
+
+- name: Report the users without a Schedule
+  when: restic_k8up_users_report_prefix | length > 0
+  block:
+    # Only the first field is read, so password hashes never reach Ansible's output.
+    - name: Read the rest-server's usernames
+      community.docker.docker_container_exec:
+        container: "{{ restic_server_users_container }}"
+        argv:
+          - cut
+          - -d
+          - ":"
+          - -f
+          - "1"
+          - "{{ restic_server_users_htpasswd_path }}"
+      delegate_to: "{{ restic_server_users_host }}"
+      register: __restic_k8up_users_server_users
+      changed_when: false
+      check_mode: false
+
+    # Not removed, since their repositories may still hold backups.
+    - name: Report the users without a Schedule
+      ansible.builtin.debug:
+        msg: >-
+          {{ __restic_k8up_users_server_users['stdout_lines']
+             | select('match', restic_k8up_users_report_prefix | regex_escape)
+             | difference(__restic_k8up_users_secrets | map(attribute='user'))
+             | list }}

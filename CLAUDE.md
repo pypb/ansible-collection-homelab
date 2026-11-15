@@ -9,6 +9,8 @@ migrated into `roles/`.
   - `smtp_client`: sets up msmtp as the sendmail and SMTP client of a server, sending mail through a relay
   - `restic_backup`: installs and configures restic and resticprofile
   - `restic_server_users`: manages logins on a containerised rest-server
+  - `restic_k8up_users`: rest-server logins and credential Secrets for a cluster's
+    k8up Schedules
   - `acme_certificates`: trusts private CAs, and requests certificates from an ACME
     server with DNS-01, installing them anywhere, including Unifi keystores
   - `ubuntu_k3s_node`: strips Ubuntu down to a minimal k3s node, with sysctl, NFS,
@@ -43,6 +45,8 @@ migrated into `roles/`.
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and
     `ocfs2`, one node at a time
+  - `k3s_cluster`: one k3s cluster: the `ubuntu_k3s_node` playbook, k3s with
+    `xanmanning.k3s` and `restic_k8up_users`
   - `upgrade`: installs all pending upgrades one host at a time, rebooting through
     the `ubuntu_k3s_node` role's `reboot` entry point
 - Plugins: none yet

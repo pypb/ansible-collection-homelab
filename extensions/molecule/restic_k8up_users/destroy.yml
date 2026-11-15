@@ -1,0 +1,14 @@
+---
+- name: Destroy rest-server and the cluster's state
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Remove rest-server container
+      community.docker.docker_container:
+        name: molecule-k8up-rest-server
+        state: absent
+
+    - name: Remove the cluster's state
+      ansible.builtin.file:
+        path: "{{ __molecule_state }}"
+        state: absent

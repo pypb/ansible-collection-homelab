@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  role_name: restic_k8up_users
+  namespace: pypb
+  author: pypb
+  description: Gives k8up backup Schedules their own logins on a containerised rest-server, with Kubernetes Secrets.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: GenericLinux
+      versions:
+        - all
+  galaxy_tags:
+    - backup
+    - restic
+    - k8up
+    - kubernetes
+dependencies: []

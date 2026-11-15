@@ -1,0 +1,29 @@
+---
+argument_specs:
+  main:
+    short_description: Gives k8up Schedules their own logins on a rest-server.
+    description:
+      - Lists the k8up Schedules of a cluster, and gives each one whose rest backend is on O(restic_k8up_users_server_host) a login on the rest-server.
+      - The login is named by the first path segment of the repository URL, as rest-server's C(--private-repos) requires.
+      - When the Schedule's credential Secret is missing, or holds another username, a new password is set with the C(pypb.homelab.restic_server_users) role.
+      - The Secret is then written in the Schedule's namespace. Secrets that match are left alone.
+      - The username and password must be keys of the same Secret.
+      - Users with O(restic_k8up_users_report_prefix) and no Schedule are reported, not removed.
+      - Run it on one host per cluster. The rest-server is reached with the variables of C(pypb.homelab.restic_server_users).
+    author:
+      - pypb
+    options:
+      restic_k8up_users_kubectl:
+        type: list
+        elements: str
+        default: [k3s, kubectl]
+        description: The command that runs kubectl against the cluster, as a list.
+      restic_k8up_users_server_host:
+        type: str
+        description:
+          - The rest-server's host name. Only Schedules whose rest backend is on it get logins.
+          - Defaults to the host of C(restic_backup_repo_url).
+      restic_k8up_users_report_prefix:
+        type: str
+        default: ""
+        description: Users on the rest-server that start with this and have no Schedule are reported. Empty reports nothing.
