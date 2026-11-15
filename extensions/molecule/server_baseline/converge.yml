@@ -23,6 +23,11 @@
                                          | regex_findall('(?m)^nameserver\\s+(\\S+)') }}"
         # Overlay file systems have no file attributes.
         server_baseline_resolv_conf_immutable: false
+        server_baseline_journald:
+          Storage: volatile
+          ForwardToSyslog: false
+          ForwardToWall: false
+        server_baseline_rsyslog: false
         server_baseline_timezone: Asia/Tokyo
         server_baseline_sudo_timestamp_timeout: 30
         server_baseline_vim_disable_mouse: true

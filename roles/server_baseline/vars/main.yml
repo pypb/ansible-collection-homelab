@@ -16,7 +16,8 @@ __server_baseline_install: >-
 __server_baseline_purge: >-
   {{ server_baseline_purged_packages
      + (server_baseline_ubuntu_purged_packages if __server_baseline_ubuntu | bool else [])
-     + (server_baseline_vm_purged_packages if ansible_facts['virtualization_role'] == 'guest' else []) }}
+     + (server_baseline_vm_purged_packages if ansible_facts['virtualization_role'] == 'guest' else [])
+     + ([] if server_baseline_rsyslog | bool else ['rsyslog']) }}
 
 # In check mode, packages the run would install aren't there yet.
 __server_baseline_pending: "{{ ansible_check_mode and __server_baseline_install_result is changed }}"
@@ -34,3 +35,22 @@ __server_baseline_grub_managed: >-
 
 __server_baseline_grub_dropin: /etc/default/grub.d/99-server-baseline.cfg
 __server_baseline_pi_cmdline: /boot/firmware/cmdline.txt
+
+__server_baseline_journald_dropin: /etc/systemd/journald.conf.d/90-server-baseline.conf
+__server_baseline_journald_volatile: "{{ server_baseline_journald.get('Storage', '') | string in ['volatile', 'none'] }}"
+
+# The files Debian's and Ubuntu's rsyslog configurations write, with their rotations.
+__server_baseline_rsyslog_logs:
+  - auth.log*
+  - cron.log*
+  - daemon.log*
+  - debug*
+  - kern.log*
+  - lpr.log*
+  - mail.err*
+  - mail.info*
+  - mail.log*
+  - mail.warn*
+  - messages*
+  - syslog*
+  - user.log*

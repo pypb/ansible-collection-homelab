@@ -11,6 +11,7 @@ the roles that give it a purpose:
   NetworkManager, dhclient and resolvconf from rewriting it.
 - Sets sysctl settings, the time zone, the sudo password timeout, vim's mouse,
   `/tmp` as tmpfs on Debian and Ubuntu's motd-news.
+- Sets journald settings, and optionally purges rsyslog. See [Logging](#logging).
 - Writes the message of the day and the login banners.
 - Sets the kernel consoles and the GRUB menu, or the consoles on a Raspberry Pi's
   kernel command line. See [Consoles and boot menu](#consoles-and-boot-menu).
@@ -47,6 +48,8 @@ purge packages, turn off ICMP redirects, and keep motd-news as it is.
 | `server_baseline_resolv_conf_immutable` | `true` | Make resolv.conf immutable |
 | `server_baseline_sysctl_file` | `90-server-baseline.conf` | Name of the sysctl file in `/etc/sysctl.d` |
 | `server_baseline_sysctl` | No ICMP redirects | Sysctl settings |
+| `server_baseline_journald` | `{}` | journald settings, such as `Storage: volatile`. See [Logging](#logging) |
+| `server_baseline_rsyslog` | `true` | Keep rsyslog. False purges it and deletes its log files |
 | `server_baseline_timezone` | `""` | Time zone, such as `Europe/Berlin` |
 | `server_baseline_sudo_timestamp_timeout` | Not set | Minutes sudo remembers a password. Installs sudo |
 | `server_baseline_vim_disable_mouse` | `false` | Turn off the mouse in vim, so that the terminal selects and pastes text |
@@ -77,6 +80,11 @@ and settings as they are.
         server_baseline_domain: example.com
         server_baseline_nameservers: [192.0.2.53, 192.0.2.54]
         server_baseline_timezone: Europe/Berlin
+        server_baseline_journald:
+          Storage: volatile
+          ForwardToSyslog: false
+          ForwardToWall: false
+        server_baseline_rsyslog: false
         server_baseline_motd_news: false
         server_baseline_issue_net: |
           Authorised use only.
@@ -104,7 +112,23 @@ So that the file stays as written, the role:
 Containers, which get their resolv.conf and hosts file from their host, are
 skipped.
 
-## Consoles and boot menu
+## Logging
+
+`server_baseline_journald` goes in
+`/etc/systemd/journald.conf.d/90-server-baseline.conf`, which overrides
+`/etc/systemd/journald.conf`, and journald restarts when it changes. Booleans
+become `yes` and `no`. The file is removed when the setting is empty.
+
+With `Storage` set to `volatile` or `none`, the journal is kept in memory only, and
+the role deletes the persistent journal in `/var/log/journal`. journald doesn't do
+that itself, and journalctl would keep showing the old entries.
+
+With `server_baseline_rsyslog: false`, the role purges rsyslog and deletes the
+files it wrote in `/var/log`, such as `syslog`, `auth.log` and `kern.log`, with
+their rotations. Purging rsyslog leaves them, and removes the logrotate settings
+that rotated them. Ubuntu's `ubuntu-minimal` only recommends rsyslog, so nothing
+else goes with it. Set `ForwardToSyslog: false` too.
+
 
 The kernel writes its messages to every console on its command line, but
 `/dev/console`, and with it systemd's start and stop messages, is only the last
@@ -141,15 +165,16 @@ the next boot.
 - **Atomic:** no.
 - **Check mode:** yes. Settings that need a package the run would install, such as
   the time zone and sudo, are skipped.
-- **Applied right away:** packages, sysctl settings, the time zone, resolv.conf and
-  the other files.
+- **Applied right away:** packages, sysctl settings, journald settings, the time
+  zone, resolv.conf and the other files.
 - **Applied at the next boot:** `/tmp` as tmpfs, the kernel consoles and the GRUB
   settings.
-- **Replaced files:** resolv.conf, `/etc/mailname`, the sysctl file, the GRUB file,
+- **Replaced files:** resolv.conf, `/etc/mailname`, the sysctl file, the journald file, the GRUB file,
   `/etc/sudoers.d/timeout`, `/etc/vim/vimrc.local`, and the motd and banner files
   that are set are replaced in full. Only the `127.0.1.1` line of `/etc/hosts` changes, and it's never added, since
   hosts such as Proxmox VE need their name to resolve to their real address.
-- **Rollback:** none. Purged packages have to be installed again by hand.
+- **Rollback:** none. Purged packages have to be installed again by hand, and
+  deleted logs are gone.
 
 ## License
 

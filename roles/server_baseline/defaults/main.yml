@@ -64,6 +64,18 @@ server_baseline_sysctl:
   net.ipv4.conf.all.send_redirects: 0
   net.ipv4.conf.default.send_redirects: 0
 
+# Settings for the [Journal] section of
+# /etc/systemd/journald.conf.d/90-server-baseline.conf, such as Storage: volatile.
+# With Storage volatile or none, the persistent journal is deleted. The file is
+# removed when empty.
+server_baseline_journald: {}
+#  Storage: volatile
+#  ForwardToSyslog: false
+
+# Keep rsyslog. False purges it and deletes its log files in /var/log, leaving
+# the journal as the only log.
+server_baseline_rsyslog: true
+
 # Time zone, such as Europe/Berlin. Not changed when empty.
 server_baseline_timezone: ""
 
