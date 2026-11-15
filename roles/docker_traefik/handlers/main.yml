@@ -1,0 +1,7 @@
+---
+- name: Restart Traefik
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_traefik_dir }}"
+    state: restarted
+  # In check mode, the project may not exist yet.
+  when: not (ansible_check_mode and __docker_traefik_project is changed)

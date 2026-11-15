@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+services:
+  reverse-proxy:
+    image: {{ docker_traefik_image | to_json }}
+    restart: always
+    env_file:
+      - .env
+{% if docker_traefik_environment %}
+    environment:
+{% for key, value in docker_traefik_environment | dictsort %}
+      {{ key | to_json }}: {{ value | string | to_json }}
+{% endfor %}
+{% endif %}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+{% if docker_traefik_ports %}
+    ports:
+{% for port in docker_traefik_ports %}
+      - {{ port | string | to_json }}
+{% endfor %}
+{% endif %}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      # The host's CAs, including private ones it trusts.
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
+      - ./conf:/etc/traefik:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+      - logs:/logs
+{% for volume in docker_traefik_volumes %}
+      - {{ volume | to_json }}
+{% endfor %}
+    networks:
+      - default
+      - reverse_proxy
+
+networks:
+  # Other projects' containers join it to be reached by Traefik. It has no
+  # route out.
+  reverse_proxy:
+    driver: bridge
+    internal: true
+
+volumes:
+  data:
+  logs:

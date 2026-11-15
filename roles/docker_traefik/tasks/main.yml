@@ -1,0 +1,93 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - docker_traefik_dynamic_config.keys() | reject('match', '^[A-Za-z0-9_.-]+\.ya?ml$') | length == 0
+      - docker_traefik_secret_environment.keys() | reject('match', '^[A-Za-z_][A-Za-z0-9_]*$') | length == 0
+    fail_msg: >-
+      docker_traefik_dynamic_config takes file names ending in .yml or .yaml, of
+      letters, digits and _.-, and docker_traefik_secret_environment takes variable
+      names of letters, digits and _.
+    quiet: true
+
+- name: Create the project directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ docker_traefik_group }}"
+    mode: "0770"
+  loop:
+    - "{{ docker_traefik_dir }}"
+    - "{{ docker_traefik_dir }}/conf"
+    - "{{ docker_traefik_dir }}/conf/dynamic"
+  register: __docker_traefik_project
+
+- name: Write the Compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ docker_traefik_dir }}/docker-compose.yml"
+    owner: root
+    group: "{{ docker_traefik_group }}"
+    mode: "0660"
+
+- name: Write the secret environment
+  ansible.builtin.copy:
+    # The comment keeps the content from being empty, which copy rejects.
+    content: |
+      # Managed by Ansible
+      {% for key, value in docker_traefik_secret_environment | dictsort %}
+      {{ key }}={{ value }}
+      {% endfor %}
+    dest: "{{ docker_traefik_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Write the static configuration
+  ansible.builtin.copy:
+    content: "{{ __docker_traefik_static | to_nice_yaml(indent=2, sort_keys=false) }}"
+    dest: "{{ docker_traefik_dir }}/conf/traefik.yml"
+    owner: root
+    group: "{{ docker_traefik_group }}"
+    mode: "0640"
+  notify: Restart Traefik
+
+- name: Write the dynamic configuration
+  ansible.builtin.copy:
+    content: "{{ item['value'] | to_nice_yaml(indent=2, sort_keys=false) }}"
+    dest: "{{ docker_traefik_dir }}/conf/dynamic/{{ item['key'] }}"
+    owner: root
+    group: "{{ docker_traefik_group }}"
+    mode: "0640"
+  loop: "{{ docker_traefik_dynamic_config | dict2items }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+
+- name: Find the dynamic configuration files
+  ansible.builtin.find:
+    paths: "{{ docker_traefik_dir }}/conf/dynamic"
+    hidden: true
+    file_type: any
+  register: __docker_traefik_dynamic_files
+  # In check mode, the directory may not exist yet.
+  when: not (ansible_check_mode and __docker_traefik_project is changed)
+
+- name: Remove the dynamic configuration files that aren't listed
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ __docker_traefik_dynamic_files['files'] | default([]) | map(attribute='path')
+       | reject('in', docker_traefik_dynamic_config.keys()
+                      | map('regex_replace', '^', docker_traefik_dir ~ '/conf/dynamic/'))
+       | list }}
+
+- name: Start Traefik
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_traefik_dir }}"
+    state: present
+    pull: missing
+  # In check mode, the project may not exist yet.
+  when: not (ansible_check_mode and __docker_traefik_project is changed)

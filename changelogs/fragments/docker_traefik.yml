@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - docker_traefik - new role that runs Traefik with Docker Compose. It writes the
+    static configuration, restarting Traefik when it changes, and files of dynamic
+    configuration, which Traefik reloads by itself, removing files that aren't
+    listed. Secret environment variables go to a .env that only root can read.
+  - site - Traefik is set up in the services phase, after Docker, where
+    site_docker_traefik is true.

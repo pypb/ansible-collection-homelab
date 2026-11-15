@@ -33,6 +33,8 @@ migrated into `roles/`.
     hosts and registration as a peer on OPNsense
   - `haproxy`: HAProxy with frontends, backends and listen sections, checked before
     they are loaded
+  - `docker_traefik`: Traefik with Docker Compose, with its static and dynamic
+    configuration
 - Playbooks:
   - `site`: configures servers in phases (access, base, firewall, services,
     monitoring, backup), running each role where its `site_<role>` variable is

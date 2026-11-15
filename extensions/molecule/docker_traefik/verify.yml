@@ -1,0 +1,70 @@
+---
+- name: Verify the proxy
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Ping Traefik, which the static configuration enables
+      ansible.builtin.uri:
+        url: http://127.0.0.1/ping
+        return_content: true
+      register: __molecule_ping
+      retries: 15
+      delay: 2
+      until: __molecule_ping is succeeded
+
+    - name: Request the router of the dynamic configuration
+      ansible.builtin.uri:
+        url: http://127.0.0.1/hello
+        follow_redirects: none
+        status_code: [302, 307]
+      register: __molecule_hello
+      retries: 15
+      delay: 2
+      until: __molecule_hello is succeeded
+
+    - name: Read the secret environment
+      ansible.builtin.stat:
+        path: /srv/docker/traefik/.env
+      register: __molecule_env
+
+    - name: Check Traefik answered, and the secrets are root's
+      ansible.builtin.assert:
+        that:
+          - __molecule_ping['content'] == 'OK'
+          - __molecule_hello['location'] == 'https://example.org/'
+          - __molecule_env['stat']['mode'] == '0600'
+          - __molecule_env['stat']['pw_name'] == 'root'
+
+    - name: Leave a file in the dynamic configuration that isn't listed
+      ansible.builtin.copy:
+        content: "{}\n"
+        dest: /srv/docker/traefik/conf/dynamic/stale.yml
+        mode: "0640"
+
+    - name: Run Traefik without the router
+      ansible.builtin.include_role:
+        name: pypb.homelab.docker_traefik
+      vars:
+        docker_traefik_static_config_extra:
+          ping:
+            entryPoint: web
+
+    - name: Find the dynamic configuration files
+      ansible.builtin.find:
+        paths: /srv/docker/traefik/conf/dynamic
+        hidden: true
+      register: __molecule_dynamic
+
+    - name: Request the removed router
+      ansible.builtin.uri:
+        url: http://127.0.0.1/hello
+        follow_redirects: none
+        status_code: 404
+      register: __molecule_removed
+      retries: 15
+      delay: 2
+      until: __molecule_removed is succeeded
+
+    - name: Check the files that weren't listed were removed
+      ansible.builtin.assert:
+        that: __molecule_dynamic['files'] | length == 0

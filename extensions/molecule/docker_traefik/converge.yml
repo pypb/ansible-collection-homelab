@@ -1,0 +1,30 @@
+---
+- name: Converge a proxy
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Run Traefik
+      ansible.builtin.include_role:
+        name: pypb.homelab.docker_traefik
+      vars:
+        docker_traefik_secret_environment:
+          EXAMPLE_TOKEN: not-a-secret
+        docker_traefik_static_config_extra:
+          ping:
+            entryPoint: web
+        docker_traefik_dynamic_config:
+          hello.yml:
+            http:
+              routers:
+                hello:
+                  rule: Path(`/hello`)
+                  entryPoints:
+                    - web
+                  middlewares:
+                    - hello
+                  service: noop@internal
+              middlewares:
+                hello:
+                  redirectRegex:
+                    regex: ".*"
+                    replacement: https://example.org/

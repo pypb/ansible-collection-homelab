@@ -62,6 +62,7 @@ jobs:
           - fail2ban
           - wireguard
           - haproxy
+          - docker_traefik
           - site
           - upgrade
     env:
