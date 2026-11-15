@@ -1,0 +1,6 @@
+---
+minor_changes:
+  - users - new role that manages local groups and accounts with their SSH keys,
+    and deletes accounts and groups such as an image's default ones. It never
+    deletes the account Ansible is logged in as, so a first run as an image's
+    bootstrap account can create the account Ansible uses from then on.

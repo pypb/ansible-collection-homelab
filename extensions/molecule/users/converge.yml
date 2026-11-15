@@ -1,0 +1,32 @@
+---
+- name: Converge servers with accounts
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Manage the accounts
+      ansible.builtin.include_role:
+        name: pypb.homelab.users
+      vars:
+        users_groups:
+          - {name: automation, gid: 2100}
+        users_accounts:
+          - name: automation
+            uid: 2100
+            group: automation
+            groups: [sudo]
+            comment: Automation
+            shell: /bin/sh
+            password: "!"
+            update_password: always
+            authorized_keys:
+              - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMvrDS66b4lgn4yzsn8vEBx7z+IK1MhmGfvtAnYHIKHY molecule-one
+          - name: alice
+            groups: [adm]
+            shell: /bin/bash
+            authorized_keys:
+              - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKjba5fWqC0xHpxMrXAVte/QBtwNaRf7cPaKeG+rQkZV molecule-two
+            authorized_keys_exclusive: true
+        # Ansible is logged in as root, which has to be skipped.
+        users_removed_accounts: [pi, root]
+        users_removed_groups: [oldgroup]
+        users_remove_home: true

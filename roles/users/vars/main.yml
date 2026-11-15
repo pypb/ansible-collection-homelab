@@ -1,0 +1,14 @@
+---
+__users_required_facts:
+  - env
+  - user_id
+
+# The account Ansible logged in as, also when it became root through sudo.
+__users_login_account: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+
+__users_name_pattern: '^[a-z_][a-z0-9_.-]*$'
+
+# Accounts that don't exist yet, which in check mode have no home directory.
+__users_pending: >-
+  {{ __users_created['results'] | rejectattr('home', 'defined')
+     | map(attribute='item') | map(attribute='name') | list }}

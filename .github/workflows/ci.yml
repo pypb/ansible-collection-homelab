@@ -57,6 +57,7 @@ jobs:
           - swap
           - unattended_upgrades
           - chrony
+          - users
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

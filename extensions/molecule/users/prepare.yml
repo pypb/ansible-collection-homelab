@@ -1,0 +1,36 @@
+---
+- name: Prepare hosts with accounts to change and delete
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Create the image's default account and an old group
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      loop:
+        - [useradd, --create-home, pi]
+        - [groupadd, oldgroup]
+        - [useradd, --create-home, alice]
+      register: __molecule_add
+      changed_when: true
+      failed_when: __molecule_add['rc'] not in [0, 9]
+
+    - name: Create alice's .ssh directory
+      ansible.builtin.file:
+        path: /home/alice/.ssh
+        state: directory
+        owner: alice
+        mode: "0700"
+
+    - name: Give alice a key that isn't listed
+      ansible.builtin.copy:
+        content: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC0kL0YnQENawdYkwF3zaLBHN/PQiINaVCvS9e9mz9GL molecule-old\n"
+        dest: /home/alice/.ssh/authorized_keys
+        owner: alice
+        mode: "0600"
+
+    - name: Give the account to keep a file in its home directory
+      ansible.builtin.copy:
+        content: "keep\n"
+        dest: /home/alice/keep.txt
+        owner: alice
+        mode: "0644"
