@@ -19,6 +19,14 @@
       - server_baseline_journald.keys() | reject('match', '^[A-Za-z]+$') | length == 0
       - "'Storage' not in server_baseline_journald"
       - server_baseline_journald.values() | map('string') | select('search', '\n') | length == 0
+      - server_baseline_masked_units | reject('match', '^[A-Za-z0-9@_.:-]+$') | length == 0
+      - server_baseline_login_defs.keys() | reject('match', '^[A-Z][A-Z0-9_]*$') | length == 0
+      - server_baseline_login_defs.values() | map('string') | reject('match', '^\S+$') | length == 0
+      - server_baseline_login_defs['UMASK'] | default('') is string
+      - server_baseline_coredump.keys() | reject('match', '^[A-Za-z]+$') | length == 0
+      - server_baseline_coredump.values() | map('string') | select('search', '\n') | length == 0
+      - server_baseline_file_modes | rejectattr('path', 'defined') | length == 0
+      - server_baseline_file_modes | selectattr('mode', 'defined') | map(attribute='mode') | reject('string') | length == 0
     fail_msg: >-
       This role supports Debian and Ubuntu only. A package can't be both installed and
       purged. server_baseline_domain must be a domain name, server_baseline_nameservers
@@ -28,6 +36,10 @@
       server_baseline_tmp_tmpfs is for Debian only, since Ubuntu doesn't ship tmp.mount.
       server_baseline_journald_storage must be volatile, persistent, auto or none, and
       server_baseline_journald takes the other journald.conf options, with values on one line.
+      server_baseline_masked_units must be unit names, and server_baseline_login_defs
+      upper-case names with values of one word, with UMASK quoted.
+      server_baseline_coredump takes coredump.conf options, with values on one line.
+      Each server_baseline_file_modes entry needs a path, and its mode quoted.
     quiet: true
 
 - name: Manage packages

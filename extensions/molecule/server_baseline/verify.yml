@@ -31,6 +31,8 @@
         - /etc/dhcp/dhclient-enter-hooks.d/disable_resolvconf_update
         - /etc/vim/vimrc.local
         - /etc/systemd/journald.conf.d/90-server-baseline.conf
+        - /etc/systemd/coredump.conf.d/90-server-baseline.conf
+        - /etc/login.defs
       register: __molecule_files
 
     - name: Check the written files
@@ -50,8 +52,35 @@
           - __contents[6] is search('make_resolv_conf')
           - __contents[7] is search('^set mouse=$', multiline=true)
           - __contents[8] is search('\n\[Journal\]\nForwardToSyslog=no\nForwardToWall=no\nStorage=volatile\n$')
+          - __contents[9] is search('\n\[Coredump\]\nProcessSizeMax=0\nStorage=none\n$')
+          - __contents[10] is search('^UMASK           027$', multiline=true)
+          - __contents[10] is search('^ENCRYPT_METHOD  YESCRYPT$', multiline=true)
+          - __contents[10] is search('^LOG_OK_LOGINS   yes$', multiline=true)
+          - __contents[10] | regex_findall('(?m)^(UMASK|ENCRYPT_METHOD|LOG_OK_LOGINS)\\s') | length == 3
       vars:
         __contents: "{{ __molecule_files['results'] | map(attribute='content') | map('b64decode') | list }}"
+
+    - name: Read whether the units are masked
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, ctrl-alt-del.target, debug-shell.service]
+      register: __molecule_masked
+      changed_when: false
+      failed_when: false
+
+    - name: Check the units are masked
+      ansible.builtin.assert:
+        that: __molecule_masked['stdout_lines'] == ['masked', 'masked']
+
+    - name: Read the modes of the files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/root, /etc/molecule-mode, /etc/molecule-missing]
+      register: __molecule_modes
+
+    - name: Check the modes of the files
+      ansible.builtin.assert:
+        that:
+          - __molecule_modes['results'] | map(attribute='stat.mode', default='missing') | list == ['0700', '0600', 'missing']
 
     - name: Look for the old logs
       ansible.builtin.find:

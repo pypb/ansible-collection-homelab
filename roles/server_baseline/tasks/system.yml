@@ -93,3 +93,66 @@
   loop_control:
     label: "{{ item['dest'] }}"
   when: item['content'] is not none
+
+- name: Mask systemd units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ server_baseline_masked_units }}"
+
+- name: Write the login.defs settings
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^{{ item['key'] }}(\\s|$)"
+    line: "{{ '%-15s %s' | format(item['key'], __value) }}"
+  loop: "{{ server_baseline_login_defs | dict2items }}"
+  loop_control:
+    label: "{{ item['key'] }}"
+  vars:
+    __value: "{{ ('yes' if item['value'] else 'no') if item['value'] is boolean else item['value'] }}"
+
+- name: Create the coredump configuration directory
+  ansible.builtin.file:
+    path: "{{ __server_baseline_coredump_dropin | dirname }}"
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+  when: server_baseline_coredump | length > 0
+
+# systemd-coredump reads it at each crash, so nothing needs restarting.
+- name: Write the coredump settings
+  ansible.builtin.template:
+    src: systemd-dropin.conf.j2
+    dest: "{{ __server_baseline_coredump_dropin }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    __server_baseline_dropin_section: Coredump
+    __server_baseline_dropin_settings: "{{ server_baseline_coredump }}"
+  when: server_baseline_coredump | length > 0
+
+- name: Remove the coredump settings
+  ansible.builtin.file:
+    path: "{{ __server_baseline_coredump_dropin }}"
+    state: absent
+  when: server_baseline_coredump | length == 0
+
+- name: Look for the files to set modes on
+  ansible.builtin.stat:
+    path: "{{ item['path'] }}"
+  loop: "{{ server_baseline_file_modes }}"
+  loop_control:
+    label: "{{ item['path'] }}"
+  register: __server_baseline_file_modes_stat
+
+- name: Set the modes and owners of files
+  ansible.builtin.file:
+    path: "{{ item['item']['path'] }}"
+    mode: "{{ item['item']['mode'] | default(omit) }}"
+    owner: "{{ item['item']['owner'] | default(omit) }}"
+    group: "{{ item['item']['group'] | default(omit) }}"
+  loop: "{{ __server_baseline_file_modes_stat['results'] | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item['item']['path'] }}"

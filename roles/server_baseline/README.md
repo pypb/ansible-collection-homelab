@@ -12,6 +12,8 @@ the roles that give it a purpose:
 - Sets sysctl settings, the time zone, the sudo password timeout, vim's mouse,
   `/tmp` as tmpfs on Debian and Ubuntu's motd-news.
 - Sets journald settings, and optionally purges rsyslog. See [Logging](#logging).
+- Masks systemd units, and sets login.defs settings, coredump settings and the
+  modes and owners of files. See [Hardening](#hardening).
 - Writes the message of the day and the login banners.
 - Sets the kernel consoles and the GRUB menu, or the consoles on a Raspberry Pi's
   kernel command line. See [Consoles and boot menu](#consoles-and-boot-menu).
@@ -56,6 +58,10 @@ purge packages, turn off ICMP redirects, and keep motd-news as it is.
 | `server_baseline_vim_disable_mouse` | `false` | Turn off the mouse in vim, so that the terminal selects and pastes text |
 | `server_baseline_tmp_tmpfs` | `false` | Mount `/tmp` as tmpfs from the next boot. Debian only |
 | `server_baseline_motd_news` | `true` | Show Ubuntu's news in the message of the day |
+| `server_baseline_masked_units` | `[]` | Systemd units to mask, such as `ctrl-alt-del.target` |
+| `server_baseline_login_defs` | `{}` | Settings for `/etc/login.defs`, such as `UMASK: "027"` |
+| `server_baseline_coredump` | `{}` | Coredump settings, such as `Storage: none` |
+| `server_baseline_file_modes` | `[]` | Modes and owners of files, as a list of `path`, `mode`, `owner` and `group` |
 | `server_baseline_motd` | Not set | Contents of `/etc/motd` |
 | `server_baseline_issue` | Not set | Contents of `/etc/issue`, shown before console logins |
 | `server_baseline_issue_net` | Not set | Contents of `/etc/issue.net`, which sshd can show as its banner |
@@ -87,6 +93,16 @@ and settings as they are.
           ForwardToWall: false
         server_baseline_rsyslog: false
         server_baseline_motd_news: false
+        server_baseline_masked_units: [ctrl-alt-del.target, debug-shell.service]
+        server_baseline_login_defs:
+          UMASK: "027"
+          ENCRYPT_METHOD: YESCRYPT
+        server_baseline_coredump:
+          Storage: none
+          ProcessSizeMax: 0
+        server_baseline_file_modes:
+          - path: /root
+            mode: "0700"
         server_baseline_issue_net: |
           Authorised use only.
         server_baseline_kernel_consoles: [ttyS0, tty1]
@@ -137,6 +153,29 @@ their rotations. Purging rsyslog leaves them, and removes the logrotate settings
 that rotated them. Ubuntu's `ubuntu-minimal` only recommends rsyslog, so nothing
 else goes with it. Set `ForwardToSyslog: false` too.
 
+## Hardening
+
+These settings close off a few easy ways in, and none of them is on by default.
+
+- `server_baseline_masked_units` masks units, so that nothing can start them.
+  `ctrl-alt-del.target` stops Ctrl-Alt-Del on the console, or sent through a
+  virtual machine's screen, from rebooting the host, and `debug-shell.service`
+  stops a root shell on tty9 from being turned on from the kernel command line.
+  Units taken off the list stay masked. Unmask them with `systemctl unmask`.
+- `server_baseline_login_defs` replaces the line for each setting in
+  `/etc/login.defs`, or adds it at the end. `UMASK` is the default umask for
+  logins through PAM, and `ENCRYPT_METHOD` is how `chpasswd` and `newusers` hash
+  passwords. `passwd` itself uses PAM's settings. Quote `UMASK`, as `"027"`, or
+  YAML reads it as a number.
+- `server_baseline_coredump` goes in
+  `/etc/systemd/coredump.conf.d/90-server-baseline.conf`. `Storage: none` and
+  `ProcessSizeMax: 0` stop systemd-coredump from keeping core dumps, which can
+  hold passwords and keys. It only applies when systemd-coredump is installed.
+- `server_baseline_file_modes` sets the mode, owner and group of each path that
+  exists, such as `0700` for `/root` and the cron directories. Paths that don't
+  exist are skipped, so one list fits hosts with and without cron.
+
+## Consoles and boot menu
 
 The kernel writes its messages to every console on its command line, but
 `/dev/console`, and with it systemd's start and stop messages, is only the last
@@ -177,12 +216,12 @@ the next boot.
   zone, resolv.conf and the other files.
 - **Applied at the next boot:** `/tmp` as tmpfs, the kernel consoles and the GRUB
   settings.
-- **Replaced files:** resolv.conf, `/etc/mailname`, the sysctl file, the journald file, the GRUB file,
+- **Replaced files:** resolv.conf, `/etc/mailname`, the sysctl file, the journald and coredump files, the GRUB file,
   `/etc/sudoers.d/timeout`, `/etc/vim/vimrc.local`, and the motd and banner files
   that are set are replaced in full. Only the `127.0.1.1` line of `/etc/hosts` changes, and it's never added, since
   hosts such as Proxmox VE need their name to resolve to their real address.
-- **Rollback:** none. Purged packages have to be installed again by hand, and
-  deleted logs are gone.
+- **Rollback:** none. Purged packages have to be installed again by hand, deleted
+  logs are gone, and masked units stay masked.
 
 ## License
 

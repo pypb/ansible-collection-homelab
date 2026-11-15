@@ -91,6 +91,32 @@ server_baseline_vim_disable_mouse: false
 # Mount /tmp as tmpfs with tmp.mount. Debian only.
 server_baseline_tmp_tmpfs: false
 
+# Systemd units to mask, such as ctrl-alt-del.target and debug-shell.service.
+# Units taken off the list stay masked.
+server_baseline_masked_units: []
+
+# Settings for /etc/login.defs. Quote values such as UMASK, or YAML reads them
+# as numbers. Settings taken off the list stay as they are.
+server_baseline_login_defs: {}
+#  UMASK: "027"
+#  ENCRYPT_METHOD: YESCRYPT
+
+# Settings for the [Coredump] section of
+# /etc/systemd/coredump.conf.d/90-server-baseline.conf. The file is removed when empty.
+server_baseline_coredump: {}
+#  Storage: none
+#  ProcessSizeMax: 0
+
+# Modes and owners of existing files and directories. Paths that don't exist are
+# skipped. Quote the modes.
+server_baseline_file_modes: []
+#  - path: /root
+#    mode: "0700"
+#  - path: /etc/crontab
+#    mode: "0600"
+#    owner: root
+#    group: root
+
 # Show Ubuntu's news in the message of the day.
 server_baseline_motd_news: true
 

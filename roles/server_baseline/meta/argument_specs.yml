@@ -7,6 +7,7 @@ argument_specs:
       - Sets the host's domain name in /etc/hosts and /etc/mailname, and optionally writes a static, immutable resolv.conf.
       - Sets sysctl settings, the time zone, the sudo password timeout, vim's mouse, /tmp as tmpfs and Ubuntu's motd-news.
       - Sets journald settings, and optionally purges rsyslog and its log files.
+      - Masks systemd units, and sets login.defs settings, coredump settings and the modes of files.
       - Writes the message of the day and the login banners.
       - Sets the kernel consoles and the GRUB menu, or the consoles on a Raspberry Pi's kernel command line.
     author:
@@ -134,6 +135,46 @@ argument_specs:
         type: bool
         default: true
         description: Show Ubuntu's news in the message of the day. False turns it off.
+      server_baseline_masked_units:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Systemd units to mask, such as C(ctrl-alt-del.target) and C(debug-shell.service).
+          - Units taken off the list stay masked.
+      server_baseline_login_defs:
+        type: dict
+        default: {}
+        description:
+          - Settings for C(/etc/login.defs), such as C(UMASK) and C(ENCRYPT_METHOD). Each replaces the line that sets it, or is added at the end.
+          - Quote values such as C(UMASK), or YAML reads them as numbers. Booleans become C(yes) and C(no).
+          - Settings taken off the list stay as they are.
+      server_baseline_coredump:
+        type: dict
+        default: {}
+        description:
+          - Settings for the C([Coredump]) section of C(/etc/systemd/coredump.conf.d/90-server-baseline.conf), such as C(Storage) and C(ProcessSizeMax).
+          - Booleans become C(yes) and C(no). The file is removed when empty.
+      server_baseline_file_modes:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - Modes and owners of existing files and directories, such as C(/root) and C(/etc/crontab). Paths that don't exist are skipped.
+        options:
+          path:
+            type: path
+            required: true
+            description: The file or directory.
+          mode:
+            type: str
+            description: Its mode, quoted, such as C("0700").
+          owner:
+            type: str
+            description: Its owner.
+          group:
+            type: str
+            description: Its group.
       server_baseline_motd:
         type: str
         description: Contents of C(/etc/motd). Not managed when not set.
