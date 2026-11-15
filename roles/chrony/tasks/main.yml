@@ -1,0 +1,48 @@
+---
+- name: Gather required facts
+  ansible.builtin.setup:
+    gather_subset: min
+  when: "'os_family' not in ansible_facts"
+
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - __chrony_sources | map(attribute='host') | reject('match', '^[A-Za-z0-9][A-Za-z0-9.:-]*$') | length == 0
+      - __chrony_sources | map(attribute='options') | flatten | map('string') | reject('match', '^[A-Za-z0-9 ._:-]+$') | length == 0
+      - chrony_settings.keys() | reject('match', '^[a-z]+$') | length == 0
+      - __chrony_setting_values | select('search', '\n') | length == 0
+      - chrony_daemon_opts is not search('["\n]')
+    fail_msg: >-
+      This role supports Debian and Ubuntu only. Each entry in chrony_servers and
+      chrony_pools needs a host name or address, and options of letters, digits, spaces
+      and ._:-. The keys of chrony_settings must be chrony.conf directives, and no value
+      in chrony_settings or chrony_daemon_opts may contain a line break, nor
+      chrony_daemon_opts a double quote.
+    quiet: true
+
+# Installing chrony removes systemd-timesyncd, which conflicts with it.
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: __chrony_install
+
+- name: Purge the other time daemons
+  ansible.builtin.apt:
+    name: "{{ chrony_purged_packages }}"
+    state: absent
+    purge: true
+
+- name: Configure chrony
+  ansible.builtin.include_tasks: config.yml
+  when: not __chrony_pending | bool
+
+- name: Enable and start chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+  when: not __chrony_pending | bool

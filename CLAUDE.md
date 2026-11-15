@@ -21,6 +21,7 @@ migrated into `roles/`.
   - `swap`: zram swap with systemd-zram-generator, and encrypted swap in a file
     through crypttab
   - `unattended_upgrades`: installs upgrades automatically, with reports and reboots
+  - `chrony`: keeps the clock in sync with chrony, using its drop-in directories
 - Playbooks:
   - `restic_backup`: combines both restic roles
   - `ubuntu_k3s_node`: runs `ubuntu_k3s_node`, and optionally `iscsi_initiator` and

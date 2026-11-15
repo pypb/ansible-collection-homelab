@@ -1,0 +1,41 @@
+---
+# Ubuntu 26.04's chrony doesn't start in containers, which share the host's clock.
+# The tests pass -x, so that chronyd leaves the clock alone.
+- name: Let chrony start in the containers
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Create the chrony unit's drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/chrony.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Clear the chrony unit's container condition
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          ConditionVirtualization=
+        dest: /etc/systemd/system/chrony.service.d/molecule.conf
+        mode: "0644"
+
+# Ubuntu 24.04 starts with a chrony.conf that replaced the distribution's and
+# doesn't read the drop-in directories. The others start without chrony.
+- name: Prepare a replaced chrony.conf
+  hosts: chrony-ubuntu2404
+  gather_facts: false
+  tasks:
+    - name: Install chrony
+      ansible.builtin.apt:
+        name: chrony
+        state: present
+        update_cache: true
+
+    - name: Replace chrony.conf
+      ansible.builtin.copy:
+        content: |
+          pool 0.pool.ntp.org iburst minpoll 8 maxpoll 12
+          driftfile /var/lib/chrony/drift
+          makestep 1.0 3
+        dest: /etc/chrony/chrony.conf
+        mode: "0644"

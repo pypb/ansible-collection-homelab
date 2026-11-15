@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for __source in __chrony_sources %}
+{{ ([__source['type'], __source['host']] + __source['options'] | map('string') | list) | join(' ') }}
+{% endfor %}

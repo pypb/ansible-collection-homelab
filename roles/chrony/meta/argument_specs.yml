@@ -1,0 +1,45 @@
+---
+argument_specs:
+  main:
+    short_description: Keep the clock in sync with chrony.
+    description:
+      - Installs chrony and purges the other time daemons.
+      - Writes the NTP sources to C(/etc/chrony/sources.d/ansible.sources), and other settings to C(/etc/chrony/conf.d/ansible.conf).
+      - Leaves the distribution's C(chrony.conf) in place, unless it doesn't read those directories.
+      - When the role has sources, it turns off the distribution's, and turns them back on when it has none.
+    author:
+      - pypb
+    options:
+      chrony_servers:
+        type: list
+        elements: raw
+        default: []
+        description:
+          - NTP servers, each a host name or address, or a dict with C(host) and C(options).
+          - With C(chrony_pools), they replace the distribution's sources.
+      chrony_pools:
+        type: list
+        elements: raw
+        default: []
+        description:
+          - NTP pools, in the same form as C(chrony_servers).
+      chrony_source_options:
+        type: list
+        elements: str
+        default: [iburst]
+        description: Options for the servers and pools that don't set their own, such as C(maxpoll 12).
+      chrony_settings:
+        type: dict
+        default: {}
+        description:
+          - Other C(chrony.conf) directives, such as C(minsources) or C(allow).
+          - A list writes the directive once for each item, and true writes it with no value.
+      chrony_daemon_opts:
+        type: str
+        default: ""
+        description: The options chronyd starts with, set in C(/etc/default/chrony). Unmanaged when empty.
+      chrony_purged_packages:
+        type: list
+        elements: str
+        default: [ntp, ntpsec, openntpd, systemd-timesyncd]
+        description: Time daemons to purge, since chrony replaces them.
