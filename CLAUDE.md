@@ -37,6 +37,9 @@ migrated into `roles/`.
     they are loaded
   - `docker_traefik`: Traefik with Docker Compose, with its static and dynamic
     configuration
+  - `routeros_config`: MikroTik RouterOS configuration in numbered steps merged from
+    `routeros_config_steps_*` variables, with switch ports described once, SSH keys,
+    an export and a device backup
 - Playbooks:
   - `site`: configures servers in phases (access, base, firewall, services,
     monitoring, backup), running each role where its `site_<role>` variable is
@@ -49,7 +52,11 @@ migrated into `roles/`.
     `xanmanning.k3s` and `restic_k8up_users`
   - `upgrade`: installs all pending upgrades one host at a time, rebooting through
     the `ubuntu_k3s_node` role's `reboot` entry point
-- Plugins: none yet
+  - `routeros`: runs `routeros_config` on the `routeros` group, one device at a time
+- Plugins:
+  - filters `routeros_config_plan`, `routeros_config_ports` and
+    `routeros_ssh_fingerprint` in `plugins/filter/routeros.py`, with their docs in
+    `.yml` files beside it
 
 Update these lists, and the matching sections of `README.md`, when content is
 added.
@@ -60,10 +67,13 @@ added.
 - Install dependencies: `uv sync`
 - Lint: `yamllint .`, `ansible-lint` and `ruff check .`
 - Sanity tests: `ansible-test sanity --docker default`
+- Unit tests: `ansible-test units --docker default`, or quicker,
+  `PYTHONPATH=<dir above ansible_collections> python -m pytest tests/unit`
 - Molecule: run `molecule test --scenario-name <name>` from `extensions/`, with
   `ANSIBLE_COLLECTIONS_PATH` covering this collection, `ansible.posix`,
   `community.docker`, `community.crypto` and `community.general`, and for the
-  `site` scenario `community.zabbix`.
+  `site` scenario `community.zabbix`. The `routeros_config` scenario runs on
+  localhost without a device.
   With Podman, also start the API socket and set `DOCKER_HOST`
 - Changelog: add a fragment to `changelogs/fragments/`, then run
   `antsibull-changelog release` when releasing

@@ -1,0 +1,23 @@
+---
+# Kept out of molecule.yml, which molecule writes out with sorted keys, while the
+# order of the ports matters.
+routeros_config_bridges:
+  bridge1:
+    vlan_filtering: true
+    tagged_vlans: [1, 10]
+routeros_config_ports:
+  ether1:
+    comment: uplink
+    bridge: bridge1
+    tagged: [1, 10-11]
+  ether2:
+    comment: printer
+    bridge: bridge1
+    pvid: 13
+    frame_types: admit-only-untagged-and-priority-tagged
+    poe: {poe-out: "off"}
+  ether3:
+    comment: nas port 1
+  bond1:
+    bridge: bridge1
+    tagged: [11]

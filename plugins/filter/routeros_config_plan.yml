@@ -1,0 +1,51 @@
+---
+DOCUMENTATION:
+  name: routeros_config_plan
+  short_description: Order and check RouterOS configuration steps
+  version_added: 0.3.0
+  author: pypb
+  description:
+    - Turns a dict of numbered steps into an ordered list of module calls for the
+      P(pypb.homelab.routeros_config#role) role.
+    - Steps run in the order of their number prefix, and the operations of a step in
+      the order they are listed.
+    - An operation with C(data) calls M(community.routeros.api_modify), one with
+      C(find) and C(values) calls M(community.routeros.api_find_and_modify), and one
+      with C(command) calls M(community.routeros.command).
+    - Within a step, the api_modify operations on the same path are joined into one
+      call, so that several layers of variables can add entries to the same path.
+    - Fails on unknown keys, operations of no or several kinds, options that differ
+      for the same path in a step, and a path that removes absent entries but is set
+      in more than one step.
+  options:
+    _input:
+      description: Step names, such as C(0100_system), mapped to lists of operations.
+      type: dict
+      required: true
+    handle_absent_entries_default:
+      description: The C(handle_absent_entries) of api_modify operations that don't set it.
+      type: str
+      choices: [ignore, remove]
+      default: ignore
+
+EXAMPLES: |
+  - name: Show the order the configuration would be applied in
+    ansible.builtin.debug:
+      msg: "{{ steps | pypb.homelab.routeros_config_plan }}"
+    vars:
+      steps:
+        "0100_system":
+          - path: system identity
+            data:
+              - name: router1
+          - path: system leds
+            find: {interface: ether1}
+            values: {disabled: true}
+
+RETURN:
+  _value:
+    description:
+      - One item per module call, in order, with C(step), C(module), C(path) and the
+        module's C(args).
+    type: list
+    elements: dict

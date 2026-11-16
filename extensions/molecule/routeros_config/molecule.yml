@@ -1,0 +1,62 @@
+---
+# Works out the plan from layered steps, ports and bridges, without a device.
+platforms:
+  - name: ap1.example.test
+
+provisioner:
+  name: ansible
+  inventory:
+    hosts:
+      all:
+        hosts:
+          ap1.example.test:
+            ansible_connection: local
+            ansible_python_interpreter: "{{ ansible_playbook_python }}"
+            routeros_config_steps_ap1:
+              "0100_system":
+                - path: system leds settings
+                  data:
+                    - all-leds-off: after-1min
+            routeros_config_steps_global:
+              "0100_system":
+                - path: system identity
+                  data:
+                    - name: "{{ inventory_hostname_short }}"
+                - path: system clock
+                  data:
+                    - time-zone-name: Europe/Stockholm
+              "0150_users":
+                - path: user
+                  handle_absent_entries: remove
+                  data:
+                    - name: admin
+                      group: full
+              "0900_tool":
+                - path: tool mac-server
+                  data:
+                    - allowed-interface-list: none
+            routeros_config_steps_group:
+              "0150_users":
+                - path: user
+                  data:
+                    - name: monitor
+                      group: read
+              "0210_bonding":
+                - path: interface bonding
+                  data:
+                    - name: bond1
+                      mode: 802.3ad
+                      slaves: ether3,ether4
+              "1000_wps":
+                - path: system routerboard wps-button
+                  data:
+                    - enabled: false
+  config_options:
+    defaults:
+      collections_path: ${ANSIBLE_COLLECTIONS_PATH}
+
+scenario:
+  test_sequence:
+    - syntax
+    - converge
+    - verify

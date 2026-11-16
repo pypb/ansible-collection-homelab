@@ -1,0 +1,39 @@
+---
+# Steps come from every variable whose name starts with routeros_config_steps_,
+# such as routeros_config_steps_global, routeros_config_steps_switch or
+# routeros_config_steps_sw1_wifi. They are merged, joining the lists of a step.
+
+# Ports and bridges, each described once.
+routeros_config_ports: {}
+routeros_config_bridges: {}
+# The steps their entries go to, with the keys bridge, ethernet, port and vlan.
+routeros_config_port_steps: {}
+routeros_config_ethernet_pattern: ^(ether|sfp|qsfp|combo)\d
+
+# What api_modify does with entries on the device that aren't in the data, when
+# an operation doesn't say.
+routeros_config_handle_absent_entries_default: ignore
+
+# The API connection.
+routeros_config_api_hostname: "{{ inventory_hostname }}"
+routeros_config_api_username: "{{ ansible_user | default('admin') | regex_replace('\\+.*$', '') }}"
+routeros_config_api_password: ""
+routeros_config_api_port: 0
+routeros_config_api_tls: true
+routeros_config_api_validate_certs: true
+routeros_config_api_validate_cert_hostname: true
+routeros_config_api_ca_path: ""
+routeros_config_api_timeout: 10
+
+# SSH keys of the device's users.
+routeros_config_ssh_keys: []
+routeros_config_ssh_keys_exclusive: false
+
+# A copy of /export on the controller, made before anything is changed.
+routeros_config_export_dir: ""
+routeros_config_export_options: terse
+
+# An encrypted backup on the device, made after something changed.
+routeros_config_device_backup: false
+routeros_config_device_backup_name: ansible
+routeros_config_device_backup_password: ""

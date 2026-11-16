@@ -1,0 +1,178 @@
+---
+argument_specs:
+  main:
+    short_description: MikroTik RouterOS configuration as code.
+    description:
+      - Applies configuration to a RouterOS device in numbered steps, through the API.
+      - The steps come from every variable whose name starts with C(routeros_config_steps_),
+        such as C(routeros_config_steps_global), C(routeros_config_steps_switch) or
+        C(routeros_config_steps_sw1_wifi). They are merged with the
+        P(community.general.merge_variables#lookup) lookup, which joins the lists of a step.
+      - A step is a list of operations, run in the order listed. An operation with C(data)
+        runs M(community.routeros.api_modify), one with C(find) and C(values) runs
+        M(community.routeros.api_find_and_modify), and one with C(command) runs
+        M(community.routeros.command) over SSH.
+      - Within a step, api_modify operations on the same path are joined into one call.
+      - Ports and bridges in C(routeros_config_ports) and C(routeros_config_bridges) add
+        steps for C(interface bridge), C(interface ethernet), C(interface ethernet poe),
+        C(interface bridge port) and C(interface bridge vlan).
+      - Optionally saves C(/export) on the controller before changing anything, manages the
+        SSH keys of the device's users, and saves an encrypted backup on the device after
+        something changed.
+    author:
+      - pypb
+    options:
+      routeros_config_ports:
+        type: dict
+        default: {}
+        description:
+          - Port names mapped to their settings. Each key is optional.
+          - List the ports in the order RouterOS lists the interfaces, ethernet ports first. Bridge
+            VLAN members are written in this order, and api_modify compares them as text with what
+            the device reads back in its own order.
+          - C(comment), the comment of the port's C(interface ethernet) entry and bridge port.
+          - C(ethernet), other C(interface ethernet) fields, or false to leave the interface alone.
+            Ports whose names don't match C(routeros_config_ethernet_pattern) have no ethernet entry
+            unless this is set.
+          - C(poe), C(interface ethernet poe) fields, such as C(poe-out).
+          - C(bridge), the bridge the port belongs to, which must be in C(routeros_config_bridges).
+          - C(pvid), the port's VLAN ID, 1 by default. The port is untagged in it, unless it is also
+            among its tagged VLANs or its frame types are C(admit-only-vlan-tagged).
+          - C(tagged), VLAN IDs and ranges such as C(10-20) the port is tagged in.
+          - C(frame_types), C(admit-all) by default.
+          - C(hw), whether the bridge port uses hardware offloading.
+          - C(bridge_port), other C(interface bridge port) fields.
+      routeros_config_bridges:
+        type: dict
+        default: {}
+        description:
+          - Bridge names mapped to their settings. Each key is optional.
+          - C(vlan_filtering), whether the bridge filters VLANs. Bridge VLAN entries are only made
+            when it does.
+          - C(tagged_vlans), the VLANs the bridge itself, the CPU, is tagged in.
+          - C(cpu_interface), the name the bridge itself has in the VLAN member lists, its own name
+            by default.
+          - C(group_vlans), true to make one bridge VLAN entry for each set of VLANs with the same
+            members, rather than one per VLAN.
+          - C(settings), other C(interface bridge) fields.
+      routeros_config_port_steps:
+        type: dict
+        default: {}
+        description:
+          - The steps the entries from the ports and bridges go to, with the keys C(bridge)
+            (C(0200_bridge)), C(ethernet) (C(0200_ethernet)), C(port) (C(0220_bridge_port)) and
+            C(vlan) (C(0230_bridge_vlan)).
+      routeros_config_ethernet_pattern:
+        type: str
+        default: ^(ether|sfp|qsfp|combo)\d
+        description: Ports whose names match this regular expression get an C(interface ethernet) entry.
+      routeros_config_handle_absent_entries_default:
+        type: str
+        choices: [ignore, remove]
+        default: ignore
+        description:
+          - What api_modify does with entries on the device that aren't in the data, for operations
+            that don't set C(handle_absent_entries).
+          - With V(remove), an operation with C(data=[]) removes every entry of its path.
+      routeros_config_api_hostname:
+        type: str
+        default: "{{ inventory_hostname }}"
+        description: The address of the device's API.
+      routeros_config_api_username:
+        type: str
+        description:
+          - The user to log in to the API as.
+          - By default C(ansible_user) without any C(+) suffix, such as C(+cet1024w), or C(admin).
+      routeros_config_api_password:
+        type: str
+        required: true
+        description: The password of the API user.
+      routeros_config_api_port:
+        type: int
+        default: 0
+        description: The API port. 0 uses the default for C(routeros_config_api_tls).
+      routeros_config_api_tls:
+        type: bool
+        default: true
+        description: Whether to use the API over TLS.
+      routeros_config_api_validate_certs:
+        type: bool
+        default: true
+        description: Whether to check the device's certificate.
+      routeros_config_api_validate_cert_hostname:
+        type: bool
+        default: true
+        description: Whether the certificate must match C(routeros_config_api_hostname).
+      routeros_config_api_ca_path:
+        type: str
+        default: ""
+        description: A CA certificate file to check the device's certificate with, instead of the system's.
+      routeros_config_api_timeout:
+        type: int
+        default: 10
+        description: The API timeout, in seconds.
+      routeros_config_ssh_keys:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - SSH public keys to add to the device's users.
+          - Each has C(user), C(key), the public key line, and an optional C(comment).
+          - Keys are compared by fingerprint, so a key's comment isn't changed once it has been added.
+      routeros_config_ssh_keys_exclusive:
+        type: bool
+        default: false
+        description: Whether to remove the SSH keys, of any user, that aren't in C(routeros_config_ssh_keys).
+      routeros_config_export_dir:
+        type: str
+        default: ""
+        description:
+          - A directory on the controller to save the output of C(/export) in, as C(<inventory_hostname>.rsc),
+            before anything is changed. Saved in check mode too. Empty to not save it.
+          - Needs SSH access to the device, through C(ansible.netcommon.network_cli).
+      routeros_config_export_options:
+        type: str
+        default: terse
+        description: Options for C(/export), such as C(terse show-sensitive).
+      routeros_config_device_backup:
+        type: bool
+        default: false
+        description: Whether to save an encrypted backup on the device after something changed.
+      routeros_config_device_backup_name:
+        type: str
+        default: ansible
+        description: The name of the device backup, which replaces the previous one.
+      routeros_config_device_backup_password:
+        type: str
+        default: ""
+        description: The password the device backup is encrypted with. Required for a device backup.
+
+  plan:
+    short_description: Work out the configuration plan without connecting to the device.
+    description:
+      - Merges the steps, ports and bridges, checks them, and sets the C(routeros_config_plan)
+        fact to the list of module calls the main entry point would make, in order.
+    author:
+      - pypb
+    options:
+      routeros_config_ports:
+        type: dict
+        default: {}
+        description: Port names mapped to their settings, as for the main entry point.
+      routeros_config_bridges:
+        type: dict
+        default: {}
+        description: Bridge names mapped to their settings, as for the main entry point.
+      routeros_config_port_steps:
+        type: dict
+        default: {}
+        description: The steps the entries from the ports and bridges go to.
+      routeros_config_ethernet_pattern:
+        type: str
+        default: ^(ether|sfp|qsfp|combo)\d
+        description: Ports whose names match this regular expression get an C(interface ethernet) entry.
+      routeros_config_handle_absent_entries_default:
+        type: str
+        choices: [ignore, remove]
+        default: ignore
+        description: What api_modify does with entries that aren't in the data, for operations that don't say.

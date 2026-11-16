@@ -1,0 +1,9 @@
+---
+# A command can't tell whether it changed anything, nor run in check mode.
+- name: "Run the commands of {{ __routeros_config_item.step }}"
+  community.routeros.command:
+    commands: "{{ __routeros_config_item.args.commands }}"
+  vars:
+    ansible_connection: ansible.netcommon.network_cli
+    ansible_network_os: community.routeros.routeros
+  notify: Save a device backup

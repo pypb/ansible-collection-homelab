@@ -1,0 +1,18 @@
+---
+- name: Save a device backup
+  community.routeros.api:
+    hostname: "{{ routeros_config_api_hostname }}"
+    username: "{{ routeros_config_api_username }}"
+    password: "{{ routeros_config_api_password }}"
+    port: "{{ routeros_config_api_port if routeros_config_api_port | int > 0 else omit }}"
+    tls: "{{ routeros_config_api_tls }}"
+    validate_certs: "{{ routeros_config_api_validate_certs }}"
+    validate_cert_hostname: "{{ routeros_config_api_validate_cert_hostname }}"
+    ca_path: "{{ routeros_config_api_ca_path if routeros_config_api_ca_path | length > 0 else omit }}"
+    timeout: "{{ routeros_config_api_timeout }}"
+    path: system backup
+    cmd: >-
+      save name={{ routeros_config_device_backup_name }}
+      password="{{ routeros_config_device_backup_password }}"
+  no_log: true
+  when: routeros_config_device_backup | bool
