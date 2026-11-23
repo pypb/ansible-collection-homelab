@@ -77,7 +77,9 @@ shows how to pass generated credentials on to the `restic_backup` role.
 - **Check mode:** supported. Existing users are read, and nothing is changed.
 - **Rollback:** none. A removed login can be recreated, but a replaced password
   can't be restored.
-- **Concurrency:** writes are throttled to one host at a time.
+- **Concurrency:** writes are throttled to one host at a time, and the reads of
+  the existing users to five, so that the server's SSH doesn't drop connections
+  when many hosts run the role at once.
 - **Reloading:** after a change, the role sends `SIGHUP` to PID 1 in the container
   so that rest-server picks it up immediately.
 
