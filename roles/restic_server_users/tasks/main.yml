@@ -8,6 +8,9 @@
   loop: "{{ restic_server_users_list | map(attribute='name') | list }}"
 
 # Only the first field is read, so password hashes never reach Ansible's output.
+# Every host reads from the same server at once otherwise, and an SSH server
+# drops connections beyond its MaxStartups (10 by default), as Synology DSM
+# does with "Connection reset by peer".
 - name: Read existing rest-server usernames
   community.docker.docker_container_exec:
     container: "{{ restic_server_users_container }}"
@@ -22,6 +25,7 @@
   register: __restic_server_users_read
   changed_when: false
   check_mode: false
+  throttle: 5
 
 - name: Reset generated passwords
   ansible.builtin.set_fact:

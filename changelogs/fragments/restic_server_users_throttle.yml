@@ -1,0 +1,6 @@
+---
+bugfixes:
+  - restic_server_users - read the existing users from at most five hosts at a
+    time. Every host read them from the server at once, and with more hosts than
+    the server's SSH MaxStartups allows (10 by default), some were cut off with
+    "Connection reset by peer".
