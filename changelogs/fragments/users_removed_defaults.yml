@@ -1,0 +1,6 @@
+---
+breaking_changes:
+  - users - users_removed_accounts and users_removed_groups now default to pi,
+    ubuntu and debian, the accounts that Raspberry Pi OS, Ubuntu and Debian
+    cloud images come with, instead of nothing. Set them to [] to keep those
+    accounts.

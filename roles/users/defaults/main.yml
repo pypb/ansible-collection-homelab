@@ -23,10 +23,11 @@ users_update_password: on_create
 # Mode of the accounts' home directories.
 users_home_mode: "0700"
 
-# Accounts and groups to delete, such as the default accounts of an image.
-# The account Ansible is logged in as is never deleted.
-users_removed_accounts: []
-users_removed_groups: []
+# Accounts and groups to delete. The defaults are the accounts that Raspberry
+# Pi OS, Ubuntu and Debian cloud images come with. The account Ansible is
+# logged in as is never deleted.
+users_removed_accounts: [pi, ubuntu, debian]
+users_removed_groups: [pi, ubuntu, debian]
 
 # Delete the home directories and mail spools of deleted accounts.
 users_remove_home: false

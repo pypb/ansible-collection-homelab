@@ -81,14 +81,15 @@ argument_specs:
       users_removed_accounts:
         type: list
         elements: str
-        default: []
+        default: [pi, ubuntu, debian]
         description:
-          - Accounts to delete, such as C(pi) or an image's bootstrap account.
+          - Accounts to delete, such as an image's bootstrap account.
+          - The defaults are the accounts that Raspberry Pi OS, Ubuntu and Debian cloud images come with.
           - The account Ansible is logged in as is skipped with a message, so the next run as another account deletes it.
       users_removed_groups:
         type: list
         elements: str
-        default: []
+        default: [pi, ubuntu, debian]
         description: Groups to delete.
       users_remove_home:
         type: bool
