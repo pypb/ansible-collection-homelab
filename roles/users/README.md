@@ -29,8 +29,8 @@ creates it on a new server. See [Bootstrapping](#bootstrapping).
 | `users_accounts` | `[]` | Accounts to create. See below |
 | `users_update_password` | `on_create` | When to set passwords: `on_create` or `always` |
 | `users_home_mode` | `"0700"` | Mode of the home directories |
-| `users_removed_accounts` | `[]` | Accounts to delete |
-| `users_removed_groups` | `[]` | Groups to delete |
+| `users_removed_accounts` | `[pi, ubuntu, debian]` | Accounts to delete. The defaults are the accounts of Raspberry Pi OS, Ubuntu and Debian cloud images |
+| `users_removed_groups` | `[pi, ubuntu, debian]` | Groups to delete |
 | `users_remove_home` | `false` | Also delete the deleted accounts' home directories |
 
 Each entry in `users_accounts` has a `name`, and optionally:
@@ -76,7 +76,8 @@ Each entry in `users_accounts` has a `name`, and optionally:
             password: "{{ vault_alice_password_hash }}"
             authorized_keys:
               - ssh-ed25519 AAAA... alice@laptop
-        users_removed_accounts: [pi, bootstrap]
+        # The defaults and the image's own bootstrap account.
+        users_removed_accounts: [pi, ubuntu, debian, bootstrap]
 ```
 
 ## Bootstrapping
