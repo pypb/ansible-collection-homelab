@@ -61,3 +61,14 @@ argument_specs:
         description:
           - Files of dynamic configuration, as a dict of file name, ending in C(.yml) or C(.yaml), and content.
           - They are written to C(/etc/traefik/dynamic) in the container. Files there that aren't listed are removed.
+      docker_traefik_logrotate:
+        type: bool
+        default: true
+        description:
+          - Rotate the C(.log) files in the C(logs) volume with the host's logrotate, and send Traefik C(USR1) afterwards, which makes it reopen them.
+          - When false, the role's logrotate configuration is removed.
+      docker_traefik_logrotate_options:
+        type: list
+        elements: str
+        default: [daily, rotate 14, compress, delaycompress, missingok, notifempty]
+        description: Directives of the logrotate section, one per item.

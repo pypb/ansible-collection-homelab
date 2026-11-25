@@ -36,7 +36,7 @@ migrated into `roles/`.
   - `haproxy`: HAProxy with frontends, backends and listen sections, checked before
     they are loaded
   - `docker_traefik`: Traefik with Docker Compose, with its static and dynamic
-    configuration
+    configuration, and rotation of its log files
   - `routeros_config`: MikroTik RouterOS configuration in numbered steps merged from
     `routeros_config_steps_*` variables, with switch ports described once, SSH keys,
     an export and a device backup

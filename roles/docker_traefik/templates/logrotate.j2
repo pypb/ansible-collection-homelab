@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{{ (__docker_traefik_logs_volume['stdout'] | from_json)[0]['Mountpoint'] }}/*.log {
+{% for option in docker_traefik_logrotate_options %}
+    {{ option }}
+{% endfor %}
+    sharedscripts
+    postrotate
+        docker compose -f {{ (docker_traefik_dir ~ '/docker-compose.yml') | quote }} kill -s USR1 reverse-proxy >/dev/null 2>&1 || true
+    endscript
+}

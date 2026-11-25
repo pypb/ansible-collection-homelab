@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - docker_traefik - log files in the logs volume are rotated by the host's
+    logrotate, and Traefik gets USR1 to reopen them. Set
+    docker_traefik_logrotate to false to leave this out, and change the
+    directives with docker_traefik_logrotate_options.
+  - docker_traefik - containers of the project's services that aren't in the
+    Compose file any more are removed.

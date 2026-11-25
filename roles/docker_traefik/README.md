@@ -7,7 +7,10 @@ Runs Traefik with Docker Compose:
 - Writes the static configuration, and restarts Traefik when it changes.
 - Writes files of dynamic configuration, which Traefik reloads by itself, and
   removes the ones that aren't listed.
-- Starts the project, pulling the image when it's missing.
+- Starts the project, pulling the image when it's missing, and removes the
+  containers of services that are no longer in it.
+- Rotates the log files in the `logs` volume with the host's logrotate, and
+  sends Traefik `USR1` afterwards, which makes it reopen them.
 
 The project has an internal network, `reverse_proxy`, that containers of other
 projects can join to be reached by Traefik. With the Docker provider, they are
@@ -37,6 +40,8 @@ only exposed when they have the label `traefik.enable=true`.
 | `docker_traefik_static_config` | The `web` and `websecure` entry points, and the Docker provider | The static configuration |
 | `docker_traefik_static_config_extra` | `{}` | Merged recursively over `docker_traefik_static_config` |
 | `docker_traefik_dynamic_config` | `{}` | Files of dynamic configuration, as a dict of file name and content |
+| `docker_traefik_logrotate` | `true` | Rotate the `.log` files in the `logs` volume. When false, the role's logrotate configuration is removed |
+| `docker_traefik_logrotate_options` | `daily`, `rotate 14`, `compress`, `delaycompress`, `missingok`, `notifempty` | Directives of the logrotate section, one per item |
 
 The role always sets `providers.file` in the static configuration, to read the
 dynamic configuration from `/etc/traefik/dynamic` in the container.
@@ -78,12 +83,14 @@ and `/logs`. Put ACME storage in `/data`, and log files in `/logs`.
 
 - **Idempotent:** yes.
 - **Atomic:** no. A broken static configuration stops Traefik when it restarts.
-- **Check mode:** yes. On a new host, Traefik isn't started.
+- **Check mode:** yes. On a new host, Traefik isn't started, and logrotate
+  isn't configured, since the `logs` volume doesn't exist yet.
 - **Applied right away:** Traefik restarts when the static configuration
   changes, and the container is recreated when the Compose file or `.env`
   changes. It reloads the dynamic configuration by itself.
 - **Replaced files:** `docker-compose.yml`, `.env` and `conf/traefik.yml` in the
-  project's directory, and everything in `conf/dynamic`.
+  project's directory, everything in `conf/dynamic`, and
+  `/etc/logrotate.d/<project>-traefik`.
 - **Rollback:** none.
 
 ## License

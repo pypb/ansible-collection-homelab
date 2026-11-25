@@ -50,3 +50,16 @@ docker_traefik_static_config_extra: {}
 # Files of dynamic configuration, as a dict of file name and content. Traefik
 # reloads them without a restart, and files that aren't listed are removed.
 docker_traefik_dynamic_config: {}
+
+# Rotate the log files in the logs volume with the host's logrotate. Traefik
+# gets USR1 afterwards, which makes it reopen them.
+docker_traefik_logrotate: true
+
+# Directives of the logrotate section, one per item.
+docker_traefik_logrotate_options:
+  - daily
+  - rotate 14
+  - compress
+  - delaycompress
+  - missingok
+  - notifempty

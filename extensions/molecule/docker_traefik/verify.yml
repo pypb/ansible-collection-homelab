@@ -35,6 +35,48 @@
           - __molecule_env['stat']['mode'] == '0600'
           - __molecule_env['stat']['pw_name'] == 'root'
 
+    - name: Find the logs volume
+      ansible.builtin.command:
+        argv: [docker, volume, inspect, --format, "{{ '{{' }} .Mountpoint {{ '}}' }}", traefik_logs]
+      register: __molecule_logs
+      changed_when: false
+
+    - name: Rotate the log files now
+      ansible.builtin.command:
+        argv: [logrotate, --force, /etc/logrotate.d/traefik-traefik]
+      changed_when: true
+
+    - name: Wait for Traefik to reopen its log files, on USR1 from logrotate
+      ansible.builtin.command:
+        argv: [docker, logs, traefik-reverse-proxy-1]
+      register: __molecule_traefik_log
+      changed_when: false
+      retries: 15
+      delay: 1
+      until: "'re-opening log files' in __molecule_traefik_log['stdout'] ~ __molecule_traefik_log['stderr']"
+
+    - name: Request the router again, after the rotation
+      ansible.builtin.uri:
+        url: http://127.0.0.1/hello
+        follow_redirects: none
+        status_code: [302, 307]
+
+    - name: Read the access log after the rotation
+      ansible.builtin.slurp:
+        src: "{{ __molecule_logs['stdout'] }}/access.log"
+      register: __molecule_access_log
+
+    - name: Find the rotated access log
+      ansible.builtin.stat:
+        path: "{{ __molecule_logs['stdout'] }}/access.log.1"
+      register: __molecule_rotated
+
+    - name: Check the log was rotated, and Traefik writes to a new one
+      ansible.builtin.assert:
+        that:
+          - __molecule_rotated['stat']['exists']
+          - "'/hello' in __molecule_access_log['content'] | b64decode"
+
     - name: Leave a file in the dynamic configuration that isn't listed
       ansible.builtin.copy:
         content: "{}\n"
