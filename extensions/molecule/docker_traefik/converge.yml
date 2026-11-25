@@ -12,6 +12,11 @@
         docker_traefik_static_config_extra:
           ping:
             entryPoint: web
+          # The test's router goes to noop@internal, which is only logged
+          # with addInternals.
+          accessLog:
+            filePath: /logs/access.log
+            addInternals: true
         docker_traefik_dynamic_config:
           hello.yml:
             http:

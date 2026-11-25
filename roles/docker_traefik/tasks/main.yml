@@ -89,5 +89,48 @@
     project_src: "{{ docker_traefik_dir }}"
     state: present
     pull: missing
+    # Containers of services that are no longer in the Compose file.
+    remove_orphans: true
   # In check mode, the project may not exist yet.
   when: not (ansible_check_mode and __docker_traefik_project is changed)
+
+- name: Install logrotate
+  ansible.builtin.package:
+    name: logrotate
+    state: present
+  when: docker_traefik_logrotate | bool
+
+# The volume exists once the project has been started. The CLI, since the
+# Docker SDK for Python may not be installed.
+- name: Find the logs volume
+  ansible.builtin.command:
+    argv:
+      - docker
+      - volume
+      - inspect
+      - --format
+      - json
+      - "{{ __docker_traefik_project_name }}_logs"
+  register: __docker_traefik_logs_volume
+  changed_when: false
+  check_mode: false
+  when:
+    - docker_traefik_logrotate | bool
+    - not (ansible_check_mode and __docker_traefik_project is changed)
+
+- name: Write the logrotate configuration
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: "{{ __docker_traefik_logrotate_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - docker_traefik_logrotate | bool
+    - __docker_traefik_logs_volume is not skipped
+
+- name: Remove the logrotate configuration
+  ansible.builtin.file:
+    path: "{{ __docker_traefik_logrotate_path }}"
+    state: absent
+  when: not docker_traefik_logrotate | bool

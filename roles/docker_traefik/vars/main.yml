@@ -8,3 +8,9 @@ __docker_traefik_static: >-
      | combine(docker_traefik_static_config_extra,
                {'providers': {'file': {'directory': __docker_traefik_dynamic_dir, 'watch': true}}},
                recursive=true) }}
+
+# Compose's name for the project: the directory's name, lower case, without
+# the characters that a project name can't have.
+__docker_traefik_project_name: "{{ docker_traefik_dir | basename | lower | regex_replace('[^a-z0-9_-]', '') }}"
+
+__docker_traefik_logrotate_path: /etc/logrotate.d/{{ __docker_traefik_project_name }}-traefik

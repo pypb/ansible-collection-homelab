@@ -45,7 +45,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.fail2ban`](roles/fail2ban/README.md) | Bans hosts that fail to log in, with jails, defaults and action settings in fail2ban's `.local` files, banning through nftables | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.wireguard`](roles/wireguard/README.md) | A WireGuard interface with wg-quick, with listed peers, a mesh of inventory hosts and optional registration as a peer on OPNsense | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.haproxy`](roles/haproxy/README.md) | HAProxy, with frontends, backends and listen sections, checked with `haproxy -c` before they replace the running configuration | Debian 13, Ubuntu 24.04 and 26.04 |
-| [`pypb.homelab.docker_traefik`](roles/docker_traefik/README.md) | Traefik with Docker Compose, with its static configuration and files of dynamic configuration that it reloads by itself | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.docker_traefik`](roles/docker_traefik/README.md) | Traefik with Docker Compose, with its static configuration and files of dynamic configuration that it reloads by itself, and rotation of its log files | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.routeros_config`](roles/routeros_config/README.md) | MikroTik RouterOS configuration as code: numbered steps merged from any number of inventory variables and applied through the API, switch ports described once, SSH keys, an export before and an encrypted backup after a change | RouterOS 7 |
 
