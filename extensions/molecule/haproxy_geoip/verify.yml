@@ -1,0 +1,87 @@
+---
+- name: Verify the country lists
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Read the lists
+      ansible.builtin.slurp:
+        src: /etc/haproxy/geoip/{{ item }}.lst
+      loop: [nordic, sweden]
+      register: __molecule_lists
+
+    - name: Check the lists hold their countries' prefixes, joined and sorted
+      ansible.builtin.assert:
+        that:
+          - __molecule_nordic == ['192.0.2.0/24', '198.51.100.0/24', '203.0.113.0/24', '2001:db8:1::/48']
+          - __molecule_sweden == ['192.0.2.0/25', '198.51.100.0/24', '2001:db8:1::/48']
+      vars:
+        __molecule_prefixes: >-
+          {{ __molecule_lists['results'] | map(attribute='content') | map('b64decode')
+             | map('regex_findall', '(?m)^[0-9a-f].*$') | list }}
+        __molecule_nordic: "{{ __molecule_prefixes[0] }}"
+        __molecule_sweden: "{{ __molecule_prefixes[1] }}"
+
+    - name: Run the installed script
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/haproxy-geoip-update, --help]
+      changed_when: false
+
+    - name: Read whether the timer is enabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, haproxy-geoip-update.timer]
+      changed_when: false
+
+    - name: Check HAProxy answers a local client, which is in no list
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        status_code: 403
+      register: __molecule_page
+      retries: 5
+      delay: 2
+      until: __molecule_page is succeeded
+
+    # As if a download had replaced the seed.
+    - name: Replace Sweden's prefixes
+      ansible.builtin.copy:
+        content: |
+          # SE from a download
+          198.51.100.0/24
+        dest: /etc/haproxy/geoip/countries/se.lst
+        mode: "0644"
+
+    - name: Run the role again
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy_geoip
+      vars:
+        haproxy_geoip_lists:
+          sweden: [se]
+        haproxy_geoip_seeds_dir: "{{ playbook_dir }}/seeds"
+        haproxy_geoip_min_prefixes: 100000000
+
+    - name: Read the list again
+      ansible.builtin.slurp:
+        src: /etc/haproxy/geoip/sweden.lst
+      register: __molecule_sweden_after
+
+    - name: Check the downloaded prefixes were kept and not replaced by the seed
+      ansible.builtin.assert:
+        that: >-
+          __molecule_sweden_after['content'] | b64decode
+          | regex_findall('(?m)^[0-9a-f].*$') == ['198.51.100.0/24']
+
+    - name: Try a list with a country that isn't a code
+      block:
+        - name: Run the role with a bad country
+          ansible.builtin.include_role:
+            name: pypb.homelab.haproxy_geoip
+          vars:
+            haproxy_geoip_lists:
+              sweden: [sweden]
+      rescue:
+        - name: Note the failure
+          ansible.builtin.set_fact:
+            __molecule_rejected: true
+
+    - name: Check the bad country was rejected
+      ansible.builtin.assert:
+        that: __molecule_rejected | default(false)

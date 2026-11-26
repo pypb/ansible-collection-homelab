@@ -171,6 +171,18 @@
         - docker
       when: site_docker | default(false) | bool
 
+    # Before HAProxy, whose configuration can refer to the lists and isn't
+    # valid until they exist.
+    - name: Set up HAProxy's country lists
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy_geoip
+        apply:
+          tags:
+            - haproxy_geoip
+      tags:
+        - haproxy_geoip
+      when: site_haproxy_geoip | default(false) | bool
+
     - name: Set up HAProxy
       ansible.builtin.include_role:
         name: pypb.homelab.haproxy

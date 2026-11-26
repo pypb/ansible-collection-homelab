@@ -1,0 +1,30 @@
+---
+- name: Converge a load balancer with country lists
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Write the country lists
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy_geoip
+      vars:
+        haproxy_geoip_lists:
+          nordic: [SE, dk]
+          sweden: [se]
+        # Documentation prefixes, so that the test needs no download.
+        haproxy_geoip_seeds_dir: "{{ playbook_dir }}/seeds"
+        # So that a download, which the role starts in the background, never
+        # looks good enough to replace the seeds while the test runs.
+        haproxy_geoip_min_prefixes: 100000000
+
+    # Its configuration is checked with haproxy -c, which fails if a list is
+    # missing.
+    - name: Set up HAProxy with the lists
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy
+      vars:
+        haproxy_frontends:
+          web: |
+            bind 127.0.0.1:8080
+            http-request deny unless { src -f /etc/haproxy/geoip/nordic.lst }
+            http-request deny unless { src -f /etc/haproxy/geoip/sweden.lst }
+            http-request return status 200 content-type text/plain string "ok"

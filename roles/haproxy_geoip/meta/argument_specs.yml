@@ -1,0 +1,41 @@
+---
+argument_specs:
+  main:
+    short_description: Lists of countries' IP prefixes for HAProxy ACLs.
+    description:
+      - Writes files of IP prefixes by country, for C(src -f) in HAProxy ACLs, from DB-IP's IP to Country Lite.
+      - IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0.
+      - A systemd timer looks for a new month of the database, and reloads HAProxy when a list changes.
+      - A download that fails or looks broken keeps the last good prefixes.
+      - The lists exist before the role ends, so a HAProxy configuration that refers to them can be checked right after.
+    author:
+      - pypb
+    options:
+      haproxy_geoip_lists:
+        type: dict
+        default: {}
+        description:
+          - "Lists to write, as a dict of list name and the ISO codes of its countries, such as C({web_allowed: [se, dk]})."
+          - Each list is written to C(<haproxy_geoip_dir>/<name>.lst). A list that is removed here is left on the host.
+      haproxy_geoip_dir:
+        type: path
+        default: /etc/haproxy/geoip
+        description: Directory of the lists, the countries' last good prefixes and the update script's configuration.
+      haproxy_geoip_seeds_dir:
+        type: str
+        default: ""
+        description:
+          - Directory on the controller with a C(<code>.lst) per country, written with C(haproxy_geoip_update.py --seeds DIR CODE...).
+          - A seed is copied for a country the host has never had, and used until its first download works.
+          - A country without a seed is downloaded while the role runs, which fails if DB-IP can't be reached.
+      haproxy_geoip_on_calendar:
+        type: str
+        default: daily
+        description:
+          - When to look for a new month of the database, as a systemd C(OnCalendar) expression.
+          - A random delay of up to an hour is added.
+      haproxy_geoip_min_prefixes:
+        type: int
+        default: 50
+        description:
+          - A country with fewer IPv4 prefixes than this in a download, or with less than half as many as its last good one, keeps those.

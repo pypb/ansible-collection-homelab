@@ -1,0 +1,3 @@
+{{ {'dir': haproxy_geoip_dir,
+    'min_prefixes': haproxy_geoip_min_prefixes | int,
+    'lists': haproxy_geoip_lists} | to_nice_json }}

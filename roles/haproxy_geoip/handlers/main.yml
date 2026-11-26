@@ -1,0 +1,10 @@
+---
+# Without waiting: the lists already exist, and a failure is retried by the
+# service.
+- name: Download the countries now
+  ansible.builtin.systemd_service:
+    name: haproxy-geoip-update.service
+    state: started
+    no_block: true
+  # In check mode, the service may not be written yet.
+  when: not ansible_check_mode

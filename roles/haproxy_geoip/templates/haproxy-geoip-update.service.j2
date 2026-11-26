@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Refresh HAProxy's country lists
+Wants=network-online.target
+After=network-online.target
+# Retry for as long as the downloads fail.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart={{ __haproxy_geoip_script }} --config {{ __haproxy_geoip_config }}
+Restart=on-failure
+RestartSec=1h

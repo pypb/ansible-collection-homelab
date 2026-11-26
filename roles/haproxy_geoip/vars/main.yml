@@ -1,0 +1,13 @@
+---
+__haproxy_geoip_script: /usr/local/sbin/haproxy-geoip-update
+__haproxy_geoip_config: "{{ haproxy_geoip_dir }}/config.json"
+
+__haproxy_geoip_countries: >-
+  {{ haproxy_geoip_lists.values() | flatten | map('lower') | unique | sort }}
+
+# The countries that have a seed on the controller.
+__haproxy_geoip_seeded: >-
+  {{ (query('ansible.builtin.fileglob', haproxy_geoip_seeds_dir ~ '/*.lst')
+      if haproxy_geoip_seeds_dir | length > 0 else [])
+     | map('basename') | map('regex_replace', '\.lst$', '')
+     | select('in', __haproxy_geoip_countries) | list }}
