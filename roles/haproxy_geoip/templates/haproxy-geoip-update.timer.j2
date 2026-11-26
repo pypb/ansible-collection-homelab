@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Refresh HAProxy's country lists
+
+[Timer]
+# Soon after the timer starts, at boot or when it's first set up, as the
+# lists may only be the seeds, and then on the calendar.
+OnActiveSec=5min
+OnCalendar={{ haproxy_geoip_on_calendar }}
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

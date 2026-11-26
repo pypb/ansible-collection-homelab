@@ -76,6 +76,7 @@ jobs:
           - fail2ban
           - wireguard
           - haproxy
+          - haproxy_geoip
           - docker_traefik
           - routeros_config
           - site

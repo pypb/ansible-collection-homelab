@@ -1,0 +1,35 @@
+---
+__haproxy_geoip_script: /usr/local/sbin/haproxy-geoip-update
+__haproxy_geoip_config: "{{ haproxy_geoip_dir }}/config.json"
+
+__haproxy_geoip_countries: >-
+  {{ haproxy_geoip_lists.values() | flatten | map('lower') | unique | sort }}
+
+# The countries that have a seed on the controller.
+__haproxy_geoip_seeded: >-
+  {{ (query('ansible.builtin.fileglob', haproxy_geoip_seeds_dir ~ '/*.lst')
+      if haproxy_geoip_seeds_dir | length > 0 else [])
+     | map('basename') | map('regex_replace', '\.lst$', '')
+     | select('in', __haproxy_geoip_countries) | list }}
+
+__haproxy_geoip_units:
+  - haproxy-geoip-update.service
+  - haproxy-geoip-update.timer
+
+# Where pypb.homelab.haproxy's variables still refer to the lists, such as
+# "backend web". Lines are only searched when they're a string.
+__haproxy_geoip_pattern: "{{ (haproxy_geoip_dir | regex_escape) ~ '/' }}"
+__haproxy_geoip_referring: >-
+  {{ (haproxy_frontends | default({}) | dict2items | selectattr('value', 'string')
+      | selectattr('value', 'search', __haproxy_geoip_pattern) | map(attribute='key')
+      | map('regex_replace', '^', 'frontend ') | list)
+     + (haproxy_backends | default({}) | dict2items | selectattr('value', 'string')
+      | selectattr('value', 'search', __haproxy_geoip_pattern) | map(attribute='key')
+      | map('regex_replace', '^', 'backend ') | list)
+     + (haproxy_listens | default({}) | dict2items | selectattr('value', 'string')
+      | selectattr('value', 'search', __haproxy_geoip_pattern) | map(attribute='key')
+      | map('regex_replace', '^', 'listen ') | list)
+     + ([haproxy_global | default('')] | select('string') | select('search', __haproxy_geoip_pattern)
+      | map('regex_replace', '(?s).*', 'global') | list)
+     + ([haproxy_defaults | default('')] | select('string') | select('search', __haproxy_geoip_pattern)
+      | map('regex_replace', '(?s).*', 'defaults') | list) }}

@@ -35,6 +35,8 @@ migrated into `roles/`.
     hosts and registration as a peer on OPNsense
   - `haproxy`: HAProxy with frontends, backends and listen sections, checked before
     they are loaded
+  - `haproxy_geoip`: lists of countries' IP prefixes for HAProxy ACLs, from DB-IP,
+    kept up to date by a timer, with optional seeds for a new host
   - `docker_traefik`: Traefik with Docker Compose, with its static and dynamic
     configuration, and rotation of its log files
   - `routeros_config`: MikroTik RouterOS configuration in numbered steps merged from

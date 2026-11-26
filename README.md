@@ -45,6 +45,7 @@ ansible-galaxy collection install git+https://github.com/pypb/ansible-collection
 | [`pypb.homelab.fail2ban`](roles/fail2ban/README.md) | Bans hosts that fail to log in, with jails, defaults and action settings in fail2ban's `.local` files, banning through nftables | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.wireguard`](roles/wireguard/README.md) | A WireGuard interface with wg-quick, with listed peers, a mesh of inventory hosts and optional registration as a peer on OPNsense | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.haproxy`](roles/haproxy/README.md) | HAProxy, with frontends, backends and listen sections, checked with `haproxy -c` before they replace the running configuration | Debian 13, Ubuntu 24.04 and 26.04 |
+| [`pypb.homelab.haproxy_geoip`](roles/haproxy_geoip/README.md) | Lists of countries' IP prefixes for HAProxy ACLs, from DB-IP, with a timer that keeps them up to date and keeps the last good prefixes when a download fails | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.docker_traefik`](roles/docker_traefik/README.md) | Traefik with Docker Compose, with its static configuration and files of dynamic configuration that it reloads by itself, and rotation of its log files | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.ocfs2`](roles/ocfs2/README.md) | Sets up the OCFS2 cluster file system with the o2cb cluster stack, its kernel module, fencing and the mounts | Debian 13, Ubuntu 24.04 and 26.04 |
 | [`pypb.homelab.routeros_config`](roles/routeros_config/README.md) | MikroTik RouterOS configuration as code: numbered steps merged from any number of inventory variables and applied through the API, switch ports described once, SSH keys, an export before and an encrypted backup after a change | RouterOS 7 |
@@ -81,6 +82,7 @@ The phases run in this order, and the roles within a phase in the order shown:
 | firewall | `fail2ban` | `pypb.homelab.fail2ban` | `site_fail2ban` |
 | firewall | `server_hardening` | `pypb.homelab.server_hardening` | `site_server_hardening` |
 | services | `docker` | `geerlingguy.docker` | `site_docker` |
+| services | `haproxy_geoip` | `pypb.homelab.haproxy_geoip` | `site_haproxy_geoip` |
 | services | `haproxy` | `pypb.homelab.haproxy` | `site_haproxy` |
 | services | `docker_traefik` | `pypb.homelab.docker_traefik` | `site_docker_traefik` |
 | monitoring | `zabbix_agent` | `community.zabbix.zabbix_agent`, adding the `zabbix` user to `ssl-cert`, and to `docker` when `site_docker` is true | `site_zabbix_agent` |
@@ -91,7 +93,8 @@ The phases run in this order, and the roles within a phase in the order shown:
 Every `site_<role>` variable defaults to false. The order is what the roles need:
 the account Ansible uses exists before sshd limits logins, the certificates before
 the services that use them, the firewall before the services open their ports,
-fail2ban after nftables, which it bans through, Traefik and the Zabbix agent after
+fail2ban after nftables, which it bans through, the country lists before HAProxy,
+whose configuration refers to them, Traefik and the Zabbix agent after
 Docker.
 
 `zabbix_host` registers the host through the Zabbix API host in
@@ -234,6 +237,7 @@ molecule test --scenario-name nftables
 molecule test --scenario-name fail2ban
 molecule test --scenario-name wireguard
 molecule test --scenario-name haproxy
+molecule test --scenario-name haproxy_geoip
 molecule test --scenario-name docker_traefik
 molecule test --scenario-name routeros_config
 molecule test --scenario-name site

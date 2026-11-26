@@ -1,0 +1,21 @@
+---
+# The directory is removed when the role is disabled, so it must be one of
+# the role's own, at least two levels below /.
+- name: Check the directory
+  ansible.builtin.assert:
+    that:
+      - haproxy_geoip_dir is string
+      - haproxy_geoip_dir is match('^(/[A-Za-z0-9_.-]+){2,}$')
+      - haproxy_geoip_dir is not search('/\.\.?(/|$)')
+    fail_msg: >-
+      haproxy_geoip_dir must be an absolute path at least two levels below /,
+      without a trailing slash, . or .., such as /etc/haproxy/geoip.
+    quiet: true
+
+- name: Write and update the lists
+  ansible.builtin.include_tasks: enabled.yml
+  when: haproxy_geoip_enabled | bool
+
+- name: Remove the lists and their updates
+  ansible.builtin.include_tasks: disabled.yml
+  when: not haproxy_geoip_enabled | bool

@@ -1,0 +1,46 @@
+---
+# HAProxy keeps running on its old configuration when a list it refers to is
+# missing, but its next reload, restart or boot fails.
+- name: Check that HAProxy doesn't refer to the lists any more
+  ansible.builtin.assert:
+    that: __haproxy_geoip_referring | length == 0
+    fail_msg: >-
+      haproxy_geoip_enabled is false, but these HAProxy sections still refer to
+      {{ haproxy_geoip_dir }}: {{ __haproxy_geoip_referring | join(', ') }}.
+      Remove those lines first, in the same run or before.
+    quiet: true
+
+- name: Find the service and timer
+  ansible.builtin.stat:
+    path: /etc/systemd/system/{{ item }}
+  loop: "{{ __haproxy_geoip_units }}"
+  register: __haproxy_geoip_unit_files
+
+# The timer first, so that it doesn't start the service again.
+- name: Stop and disable the timer and service
+  ansible.builtin.systemd_service:
+    name: "{{ item['item'] }}"
+    enabled: false
+    state: stopped
+  loop: "{{ __haproxy_geoip_unit_files['results'] | selectattr('stat.exists') | reverse | list }}"
+  loop_control:
+    label: "{{ item['item'] }}"
+
+- name: Remove the service and timer
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item }}
+    state: absent
+  loop: "{{ __haproxy_geoip_units }}"
+  notify: Reload systemd
+
+# So that systemd forgets the units before the role ends.
+- name: Reload systemd now
+  ansible.builtin.meta: flush_handlers
+
+- name: Remove the lists and the update script
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ __haproxy_geoip_script }}"
+    - "{{ haproxy_geoip_dir }}"

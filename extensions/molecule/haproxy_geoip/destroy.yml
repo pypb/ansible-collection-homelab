@@ -1,0 +1,13 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  tasks:
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - haproxy-geoip-debian13
+        - haproxy-geoip-ubuntu2404
+        - haproxy-geoip-ubuntu2604
