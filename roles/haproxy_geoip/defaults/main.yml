@@ -1,4 +1,10 @@
 ---
+# Write and update the lists. False removes them, with the update script and
+# its timer, and fails while haproxy_frontends, haproxy_backends,
+# haproxy_listens, haproxy_global or haproxy_defaults still refer to
+# haproxy_geoip_dir.
+haproxy_geoip_enabled: false
+
 # Country lists of IP prefixes for HAProxy, as a dict of list name and the
 # countries' ISO codes. Each list is written to <haproxy_geoip_dir>/<name>.lst,
 # for "src -f" in an ACL.

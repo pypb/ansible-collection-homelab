@@ -1,6 +1,7 @@
 # pypb.homelab.haproxy_geoip
 
-Lists of countries' IP prefixes for HAProxy ACLs, kept up to date:
+Lists of countries' IP prefixes for HAProxy ACLs, kept up to date. Set
+`haproxy_geoip_enabled` to true to write them:
 
 - Writes each list in `haproxy_geoip_lists` to `<haproxy_geoip_dir>/<name>.lst`,
   with the IPv4 and IPv6 prefixes of its countries, for `src -f` in an ACL.
@@ -15,6 +16,8 @@ Lists of countries' IP prefixes for HAProxy ACLs, kept up to date:
   hourly.
 - Builds the lists before it ends, so a HAProxy configuration that refers to them
   can be checked right after. Run it before `pypb.homelab.haproxy`.
+- With `haproxy_geoip_enabled` false, the default, removes all of it: the
+  timer and service, the script and `haproxy_geoip_dir`.
 
 IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0.
 
@@ -32,6 +35,7 @@ IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0.
 
 | Variable | Default | Description |
 |---|---|---|
+| `haproxy_geoip_enabled` | `false` | Write and update the lists. False removes them, with the script, its timer and `haproxy_geoip_dir` |
 | `haproxy_geoip_lists` | `{}` | Lists, as a dict of list name and its countries' ISO codes |
 | `haproxy_geoip_dir` | `/etc/haproxy/geoip` | Directory of the lists, the countries' prefixes and the configuration |
 | `haproxy_geoip_seeds_dir` | `""` | Directory on the controller with a `<code>.lst` seed per country |
@@ -41,6 +45,20 @@ IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0.
 A month that has been applied isn't downloaded again, unless a country has no
 prefixes yet. A list that is removed from `haproxy_geoip_lists` is left on the
 host.
+
+### Turning it off
+
+Remove the ACLs that refer to the lists first, in the same run or before, then
+set `haproxy_geoip_enabled` to false. HAProxy keeps running without the lists,
+but can't reload, restart or start at boot while its configuration refers to
+them. So the role fails without removing anything while any of these still
+refer to `haproxy_geoip_dir`: `haproxy_frontends`, `haproxy_backends`,
+`haproxy_listens`, `haproxy_global` and `haproxy_defaults`. Those are the
+variables of `pypb.homelab.haproxy`, so the check covers that role's
+configuration, not one written some other way.
+
+`haproxy_geoip_dir` must be an absolute path at least two levels below `/`,
+since it's deleted.
 
 ### Seeds
 
@@ -67,6 +85,7 @@ python3 -I roles/haproxy_geoip/files/haproxy_geoip_update.py --seeds files/geoip
       ansible.builtin.include_role:
         name: pypb.homelab.haproxy_geoip
       vars:
+        haproxy_geoip_enabled: true
         haproxy_geoip_lists:
           web_allowed: [se, dk]
 
@@ -102,6 +121,7 @@ python3 -I roles/haproxy_geoip/files/haproxy_geoip_update.py --seeds files/geoip
   `/etc/systemd/system/haproxy-geoip-update.{service,timer}`. A country's
   prefixes are only replaced by a download that looks good.
 - **Rollback:** none needed. A download that looks broken is never applied.
+  Set `haproxy_geoip_enabled` to false to remove the role's files.
 
 ## License
 

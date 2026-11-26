@@ -5,6 +5,9 @@ minor_changes:
     downloads each new month, keeps a country's last good prefixes when a
     download fails or looks broken, and reloads HAProxy when a list changes.
     A new host can start from seeds on the controller, and a country without
-    one is downloaded while the role runs.
+    one is downloaded while the role runs. It only writes the lists when
+    haproxy_geoip_enabled is true; false, the default, removes them with the
+    script and its timer, and fails while HAProxy's variables still refer to
+    them.
   - site - HAProxy's country lists are set up in the services phase, before
     HAProxy, where site_haproxy_geoip is true.

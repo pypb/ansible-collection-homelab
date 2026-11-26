@@ -11,6 +11,14 @@ argument_specs:
     author:
       - pypb
     options:
+      haproxy_geoip_enabled:
+        type: bool
+        default: false
+        description:
+          - Write and update the lists.
+          - False removes the lists, the countries' prefixes, the update script and its service and timer.
+          - When false, the role fails while C(haproxy_frontends), C(haproxy_backends), C(haproxy_listens), C(haproxy_global) or
+            C(haproxy_defaults) still refer to O(haproxy_geoip_dir), since HAProxy couldn't reload without the lists.
       haproxy_geoip_lists:
         type: dict
         default: {}
@@ -20,7 +28,9 @@ argument_specs:
       haproxy_geoip_dir:
         type: path
         default: /etc/haproxy/geoip
-        description: Directory of the lists, the countries' last good prefixes and the update script's configuration.
+        description:
+          - Directory of the lists, the countries' last good prefixes and the update script's configuration.
+          - It is removed when O(haproxy_geoip_enabled) is false, so it must be the role's own, at least two levels below C(/).
       haproxy_geoip_seeds_dir:
         type: str
         default: ""

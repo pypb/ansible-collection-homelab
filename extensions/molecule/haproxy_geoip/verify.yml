@@ -53,6 +53,7 @@
       ansible.builtin.include_role:
         name: pypb.homelab.haproxy_geoip
       vars:
+        haproxy_geoip_enabled: true
         haproxy_geoip_lists:
           sweden: [se]
         haproxy_geoip_seeds_dir: "{{ playbook_dir }}/seeds"
@@ -75,6 +76,7 @@
           ansible.builtin.include_role:
             name: pypb.homelab.haproxy_geoip
           vars:
+            haproxy_geoip_enabled: true
             haproxy_geoip_lists:
               sweden: [sweden]
       rescue:
@@ -85,3 +87,85 @@
     - name: Check the bad country was rejected
       ansible.builtin.assert:
         that: __molecule_rejected | default(false)
+
+    # HAProxy's configuration still refers to the lists here.
+    - name: Try to turn the lists off while a frontend uses them
+      block:
+        - name: Turn the lists off
+          ansible.builtin.include_role:
+            name: pypb.homelab.haproxy_geoip
+          vars:
+            haproxy_frontends:
+              web: |
+                bind 127.0.0.1:8080
+                http-request deny unless { src -f /etc/haproxy/geoip/nordic.lst }
+      rescue:
+        - name: Note the refusal
+          ansible.builtin.set_fact:
+            __molecule_refused: true
+
+    - name: Read the lists after the refusal
+      ansible.builtin.stat:
+        path: /etc/haproxy/geoip/nordic.lst
+      register: __molecule_kept
+
+    - name: Check turning off was refused and nothing was removed
+      ansible.builtin.assert:
+        that:
+          - __molecule_refused | default(false)
+          - __molecule_kept['stat']['exists']
+
+    - name: Set up HAProxy without the lists
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy
+      vars:
+        haproxy_frontends: &molecule_plain
+          web: |
+            bind 127.0.0.1:8080
+            http-request return status 200 content-type text/plain string "ok"
+
+    - name: Turn the lists off
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy_geoip
+      vars:
+        haproxy_frontends: *molecule_plain
+
+    - name: Find what's left of the lists
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/haproxy/geoip
+        - /usr/local/sbin/haproxy-geoip-update
+        - /etc/systemd/system/haproxy-geoip-update.service
+        - /etc/systemd/system/haproxy-geoip-update.timer
+      register: __molecule_left
+
+    - name: Check the lists, script and units are gone
+      ansible.builtin.assert:
+        that: __molecule_left['results'] | selectattr('stat.exists') | length == 0
+
+    - name: Read whether systemd still knows the timer
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=LoadState, --value, haproxy-geoip-update.timer]
+      register: __molecule_timer
+      changed_when: false
+
+    - name: Check systemd forgot the timer
+      ansible.builtin.assert:
+        that: __molecule_timer['stdout'] == 'not-found'
+
+    - name: Request a page after the lists are gone
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        return_content: true
+      register: __molecule_page_plain
+
+    - name: Check HAProxy still answers
+      ansible.builtin.assert:
+        that: __molecule_page_plain['content'] == 'ok'
+
+    - name: Turn the lists off again
+      ansible.builtin.include_role:
+        name: pypb.homelab.haproxy_geoip
+      vars:
+        haproxy_frontends: *molecule_plain

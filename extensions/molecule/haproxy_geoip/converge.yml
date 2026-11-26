@@ -7,6 +7,7 @@
       ansible.builtin.include_role:
         name: pypb.homelab.haproxy_geoip
       vars:
+        haproxy_geoip_enabled: true
         haproxy_geoip_lists:
           nordic: [SE, dk]
           sweden: [se]

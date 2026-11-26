@@ -1,112 +1,21 @@
 ---
-- name: Validate the settings
+# The directory is removed when the role is disabled, so it must be one of
+# the role's own, at least two levels below /.
+- name: Check the directory
   ansible.builtin.assert:
     that:
-      - haproxy_geoip_lists is mapping
-      - haproxy_geoip_lists.keys() | reject('match', '^[A-Za-z0-9_.-]+$') | length == 0
-      - haproxy_geoip_lists.values() | reject('sequence') | length == 0
-      - haproxy_geoip_lists.values() | select('string') | length == 0
-      - haproxy_geoip_lists.values() | map('length') | select('==', 0) | length == 0
-      - __haproxy_geoip_countries | reject('match', '^[a-z]{2}$') | length == 0
-      - haproxy_geoip_min_prefixes | int > 0
+      - haproxy_geoip_dir is string
+      - haproxy_geoip_dir is match('^(/[A-Za-z0-9_.-]+){2,}$')
+      - haproxy_geoip_dir is not search('/\.\.?(/|$)')
     fail_msg: >-
-      haproxy_geoip_lists takes list names of letters, digits and _.-, each with
-      a list of at least one two-letter ISO country code.
-      haproxy_geoip_min_prefixes must be a positive number.
+      haproxy_geoip_dir must be an absolute path at least two levels below /,
+      without a trailing slash, . or .., such as /etc/haproxy/geoip.
     quiet: true
 
-# The script downloads over HTTPS.
-- name: Install the CA certificates
-  ansible.builtin.apt:
-    name: ca-certificates
-    update_cache: true
-    cache_valid_time: 3600
+- name: Write and update the lists
+  ansible.builtin.include_tasks: enabled.yml
+  when: haproxy_geoip_enabled | bool
 
-- name: Create the directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  loop:
-    - "{{ haproxy_geoip_dir }}"
-    - "{{ haproxy_geoip_dir }}/countries"
-
-# Only where there is no file yet, so a download is never replaced by an
-# older seed. Until the first download works, the seed is what's used.
-- name: Seed the countries that have never been downloaded
-  ansible.builtin.copy:
-    src: "{{ haproxy_geoip_seeds_dir }}/{{ item }}.lst"
-    dest: "{{ haproxy_geoip_dir }}/countries/{{ item }}.lst"
-    owner: root
-    group: root
-    mode: "0644"
-    force: false
-  loop: "{{ __haproxy_geoip_seeded }}"
-
-# The shebang is added here: ansible-test only allows #!/usr/bin/env python
-# in the collection, and Debian and Ubuntu have no python command.
-- name: Install the update script
-  ansible.builtin.copy:
-    content: "#!/usr/bin/python3\n{{ lookup('ansible.builtin.file', 'haproxy_geoip_update.py') }}\n"
-    dest: "{{ __haproxy_geoip_script }}"
-    owner: root
-    group: root
-    mode: "0755"
-  # A new script may download differently, so it runs now rather than with
-  # the next timer.
-  notify: Download the countries now
-
-- name: Write the update script's configuration
-  ansible.builtin.template:
-    src: config.json.j2
-    dest: "{{ __haproxy_geoip_config }}"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Find the countries the host has
-  ansible.builtin.find:
-    paths: "{{ haproxy_geoip_dir }}/countries"
-    patterns: "*.lst"
-  register: __haproxy_geoip_present
-
-# So that the lists exist, and match the configured countries, before the
-# HAProxy configuration that refers to them is written. Without downloading
-# when every country is there; the timer downloads soon after.
-- name: Build the lists
-  ansible.builtin.command:
-    argv: >-
-      {{ [__haproxy_geoip_script, '--config', __haproxy_geoip_config]
-         + ([] if __haproxy_geoip_missing | length > 0 else ['--offline']) }}
-  vars:
-    __haproxy_geoip_missing: >-
-      {{ __haproxy_geoip_countries
-         | reject('in', __haproxy_geoip_present['files'] | map(attribute='path')
-                        | map('basename') | map('regex_replace', '\.lst$', ''))
-         | list }}
-  register: __haproxy_geoip_build
-  changed_when: __haproxy_geoip_build['stdout'] | length > 0
-  when: not ansible_check_mode
-
-- name: Write the service and timer
-  ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: /etc/systemd/system/{{ item }}
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - haproxy-geoip-update.service
-    - haproxy-geoip-update.timer
-  register: __haproxy_geoip_units
-
-- name: Start the timer
-  ansible.builtin.systemd_service:
-    name: haproxy-geoip-update.timer
-    enabled: true
-    state: started
-    daemon_reload: "{{ __haproxy_geoip_units is changed }}"
-  # In check mode, the timer may not be written yet.
-  when: not (ansible_check_mode and __haproxy_geoip_units is changed)
+- name: Remove the lists and their updates
+  ansible.builtin.include_tasks: disabled.yml
+  when: not haproxy_geoip_enabled | bool
