@@ -55,9 +55,10 @@
   # It holds the provider's credentials, which a diff would show.
   no_log: true
 
+# The shebang is added here: ansible-test doesn't allow one in a template.
 - name: Install the script
-  ansible.builtin.template:
-    src: lego-certificates.j2
+  ansible.builtin.copy:
+    content: "#!/bin/bash\n{{ lookup('ansible.builtin.template', 'lego-certificates.j2') }}"
     dest: "{{ __lego_script }}"
     owner: root
     group: root

@@ -113,6 +113,9 @@
           - --name={{ item['name'] }}
           - --hostname={{ item['name'] }}
           - --network={{ __molecule_network }}
+          # lego looks up the zone's name server with the system's resolver,
+          # not --dns.resolvers, and Docker's doesn't know the test zone.
+          - --add-host=ns.example.test:{{ __molecule_dns_ip }}
           - --privileged
           - --cgroupns=host
           - --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw
