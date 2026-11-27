@@ -30,3 +30,11 @@ argument_specs:
         type: dict
         default: {}
         description: Listen sections, which combine a frontend and a backend, as a dict of name and the section's lines.
+      haproxy_files:
+        type: dict
+        default: {}
+        description:
+          - Files that sections refer to, such as a C(ca-file) of client certificates or a map, as a dict of file name and content.
+          - Written to C(/etc/haproxy) before the configuration is checked, C(root:root) C(0640). HAProxy reads them as root while it loads the configuration.
+          - Names have no directories, and C(haproxy.cfg) is not allowed.
+          - An entry removed from the dict leaves its file behind.

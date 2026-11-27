@@ -6,9 +6,15 @@
       - __haproxy_sections | map(attribute='value') | reject('string') | length == 0
       - haproxy_global is string
       - haproxy_defaults is string
+      - haproxy_files is mapping
+      - haproxy_files | dict2items | map(attribute='key') | reject('match', '^[A-Za-z0-9_][A-Za-z0-9_.-]*$') | length == 0
+      - haproxy_files | dict2items | map(attribute='value') | reject('string') | length == 0
+      - __haproxy_config | basename not in haproxy_files
     fail_msg: >-
       haproxy_frontends, haproxy_backends and haproxy_listens take section names of
       letters, digits and _.:-, with the section's lines as a string each.
+      haproxy_files takes file names of letters, digits and _.- (no directories,
+      not haproxy.cfg), with the content as a string each.
     quiet: true
 
 - name: Install HAProxy
@@ -17,6 +23,21 @@
     update_cache: true
     cache_valid_time: 3600
   register: __haproxy_install
+
+# Before the configuration, so that its check sees them.
+- name: Write the files the configuration refers to
+  ansible.builtin.copy:
+    content: "{{ __haproxy_file['value'] }}"
+    dest: "{{ __haproxy_config | dirname }}/{{ __haproxy_file['key'] }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: "{{ haproxy_files | dict2items }}"
+  loop_control:
+    loop_var: __haproxy_file
+    label: "{{ __haproxy_file['key'] }}"
+  register: __haproxy_files_result
+  notify: Reload HAProxy
 
 # A broken configuration is never written, so HAProxy keeps running on the
 # last good one.
@@ -28,7 +49,20 @@
     group: root
     mode: "0644"
     validate: haproxy -c -f %s
+  register: __haproxy_config_result
   notify: Reload HAProxy
+
+# Only a new configuration is checked as it's written, so check the current
+# one against changed files here, before the reload. A reload that fails
+# leaves the old process running, which is easy to miss.
+- name: Check the configuration with the changed files
+  ansible.builtin.command:
+    argv: [haproxy, -c, -f, "{{ __haproxy_config }}"]
+  changed_when: false
+  when:
+    - __haproxy_files_result is changed
+    - __haproxy_config_result is not changed
+    - not ansible_check_mode
 
 - name: Start HAProxy at boot
   ansible.builtin.systemd_service:
