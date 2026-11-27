@@ -1,0 +1,42 @@
+---
+# Issue and renew the certificates. False stops and removes the timer, the
+# service, the script and the provider's environment, and keeps lego_path
+# with the account and the certificates.
+lego_enabled: false
+
+# The ACME account's address. Required when lego_enabled is true.
+lego_email: ""
+
+lego_server: https://acme-v02.api.letsencrypt.org/directory
+
+# lego's DNS provider for the DNS-01 challenge (lego dnshelp), such as desec
+# or rfc2136, and its settings as environment variables, such as
+# DESEC_TOKEN. They're written to /etc/lego/environment, root 0600. Required
+# when lego_enabled is true.
+lego_dns_provider: ""
+lego_environment: {}
+
+# Resolvers for lego's checks that the TXT record is there, as host:port.
+# Empty uses the system's.
+lego_dns_resolvers: []
+
+# Certificates, each with its domains (the first names the files) and shell
+# commands to run, in order, when it's issued or renewed. Each is written to
+# <lego_path>/certificates/<first domain, with * as _>.pem, the key and the
+# full chain in one file, and also as .crt and .key. Certificates removed from
+# the list are left there.
+lego_certificates: []
+#  - domains: ["*.example.com", example.com]
+#    hooks:
+#      - "! systemctl --quiet is-active haproxy || systemctl reload haproxy"
+
+lego_key_type: ec256
+
+# Renew certificates that expire within this many days.
+lego_renew_days: 30
+
+lego_path: /var/lib/lego
+
+# When to look for certificates to renew, as a systemd OnCalendar expression.
+# A random delay of up to an hour is added, and a failure is retried hourly.
+lego_on_calendar: daily

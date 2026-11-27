@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for name, value in lego_environment | dictsort %}
+{{ name }}={{ value | quote }}
+{% endfor %}

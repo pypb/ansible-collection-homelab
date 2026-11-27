@@ -1,0 +1,121 @@
+---
+- name: Verify
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+    - vars/role.yml
+  vars:
+    __molecule_dir: /var/lib/lego/certificates
+  tasks:
+    - name: Read the names on the certificates
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          openssl x509 -in {{ __molecule_dir }}/{{ item }}.crt -noout -ext subjectAltName
+          | grep -o 'DNS:[^,]*' | sort | paste -sd' ' -
+        executable: /bin/bash
+      loop: [_.example.test, app.example.test]
+      register: __molecule_names
+      changed_when: false
+
+    - name: Check the names
+      ansible.builtin.assert:
+        that:
+          - __molecule_names['results'][0]['stdout'] == 'DNS:*.example.test DNS:example.test'
+          - __molecule_names['results'][1]['stdout'] == 'DNS:app.example.test'
+
+    - name: Check that the .pem has the key and the certificate, and that they match
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          test "$(openssl pkey -in {{ __molecule_dir }}/_.example.test.pem -pubout)"
+          = "$(openssl x509 -in {{ __molecule_dir }}/_.example.test.pem -noout -pubkey)"
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Read the hook's count
+      ansible.builtin.slurp:
+        src: /root/hook-wildcard-count
+      register: __molecule_count
+
+    - name: Check that the hooks ran once, in order
+      ansible.builtin.assert:
+        that: __molecule_count['content'] | b64decode == "ran\n"
+
+    - name: Check that the timer is enabled and running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, lego-certificates.timer]
+      changed_when: false
+
+    - name: Run the service, which has nothing to renew
+      ansible.builtin.systemd_service:
+        name: lego-certificates.service
+        state: started
+
+    - name: Read the hook's count after the service
+      ansible.builtin.slurp:
+        src: /root/hook-wildcard-count
+      register: __molecule_count
+
+    - name: Check that the hooks didn't run again
+      ansible.builtin.assert:
+        that: __molecule_count['content'] | b64decode == "ran\n"
+
+    - name: Add a name to a certificate
+      ansible.builtin.include_role:
+        name: pypb.homelab.lego
+      vars:
+        lego_certificates:
+          - domains: ["*.example.test", example.test]
+            hooks:
+              - touch /root/hook-wildcard
+              - echo ran >> /root/hook-wildcard-count
+          - domains: [app.example.test, www.example.test]
+
+    - name: Read the names on the changed certificate
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          openssl x509 -in {{ __molecule_dir }}/app.example.test.crt -noout -ext subjectAltName
+          | grep -o 'DNS:[^,]*' | sort | paste -sd' ' -
+        executable: /bin/bash
+      register: __molecule_changed
+      changed_when: false
+
+    - name: Check that it was issued again with both names
+      ansible.builtin.assert:
+        that:
+          - __molecule_changed['stdout'] == 'DNS:app.example.test DNS:www.example.test'
+
+    - name: Read the hook's count after the change
+      ansible.builtin.slurp:
+        src: /root/hook-wildcard-count
+      register: __molecule_count
+
+    - name: Check that the unchanged certificate's hooks didn't run
+      ansible.builtin.assert:
+        that: __molecule_count['content'] | b64decode == "ran\n"
+
+    - name: Disable the role
+      ansible.builtin.include_role:
+        name: pypb.homelab.lego
+      vars:
+        lego_enabled: false
+
+    - name: Find what disabling should remove and keep
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/sbin/lego-certificates
+        - /etc/lego
+        - /etc/systemd/system/lego-certificates.timer
+        - /etc/systemd/system/lego-certificates.service
+        - "{{ __molecule_dir }}/_.example.test.pem"
+      register: __molecule_after_disable
+
+    - name: Check that the script, environment and units are gone, and the certificates kept
+      ansible.builtin.assert:
+        that:
+          - __molecule_after_disable['results'][:4] | map(attribute='stat.exists') | select | list | length == 0
+          - __molecule_after_disable['results'][4]['stat']['exists']

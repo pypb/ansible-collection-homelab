@@ -1,0 +1,16 @@
+---
+- name: Read the root certificate of the ACME server
+  ansible.builtin.import_playbook: read_root_ca.yml
+
+- name: Prepare targets
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  tasks:
+    # lego trusts it through LEGO_CA_CERTIFICATES in lego_environment.
+    - name: Write the ACME server's root certificate
+      ansible.builtin.copy:
+        content: "{{ hostvars['molecule-host']['__molecule_root_ca'] }}\n"
+        dest: "{{ __molecule_root_ca_path }}"
+        mode: "0644"

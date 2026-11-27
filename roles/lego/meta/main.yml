@@ -1,0 +1,24 @@
+---
+galaxy_info:
+  role_name: lego
+  namespace: pypb
+  author: pypb
+  description: Certificates from Let's Encrypt or another ACME server with lego and DNS-01, renewed by a systemd timer, with hooks when one changes.
+  license: Apache-2.0
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - noble
+        - resolute
+  galaxy_tags:
+    - acme
+    - letsencrypt
+    - lego
+    - certificates
+    - debian
+    - ubuntu
+dependencies: []

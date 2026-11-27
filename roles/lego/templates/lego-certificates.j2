@@ -1,0 +1,104 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# Issues each certificate that's missing or whose names changed, and renews
+# the rest when they expire within {{ lego_renew_days }} days. When a
+# certificate's file changes, its hooks run, and when one fails, they all run
+# again the next time. A failure doesn't stop the other certificates, and the
+# script exits non-zero after them.
+set -u
+
+set -a
+# shellcheck disable=SC1091
+. {{ __lego_environment_file | quote }}
+set +a
+
+lego_args=(
+    --accept-tos
+    --email {{ lego_email | quote }}
+    --server {{ lego_server | quote }}
+    --path {{ lego_path | quote }}
+    --key-type {{ lego_key_type | quote }}
+    --dns {{ lego_dns_provider | quote }}
+{% for resolver in lego_dns_resolvers %}
+    --dns.resolvers {{ resolver | quote }}
+{% endfor %}
+    --pem
+)
+
+renew_args=(renew --days {{ lego_renew_days | int }})
+# Newer versions wait up to 8 minutes before renewing, unless told not to.
+# The timer has its own random delay.
+if lego renew --help 2>&1 | grep -q -- --no-random-sleep; then
+    renew_args+=(--no-random-sleep)
+fi
+
+status=0
+
+# certificate <file without extension> <names, sorted, space-separated>
+#             <domains as --domains arguments...> -- <hooks...>
+certificate() {
+    local file=$1 wanted=$2 have before after hook
+    shift 2
+    local domains=()
+    while [[ $1 != -- ]]; do
+        domains+=("$1")
+        shift
+    done
+    shift
+    local action=(run)
+
+    before=$(sha256sum "$file.pem" 2>/dev/null)
+    if [[ -f $file.crt && -f $file.pem ]]; then
+        have=$(openssl x509 -in "$file.crt" -noout -ext subjectAltName 2>/dev/null \
+            | grep -o 'DNS:[^,]*' | cut -c5- | tr '[:upper:]' '[:lower:]' | sort -u | paste -sd' ' -)
+        if [[ $have == "$wanted" ]]; then
+            action=("${renew_args[@]}")
+        else
+            echo "Names changed for $file ($have), issuing again"
+        fi
+    fi
+
+    if ! lego "${lego_args[@]}" "${domains[@]}" "${action[@]}"; then
+        echo "lego failed for $file" >&2
+        status=1
+        return
+    fi
+
+    after=$(sha256sum "$file.pem" 2>/dev/null)
+    if [[ $after != "$before" ]]; then
+        echo "New certificate: $file.pem"
+    elif [[ -f $file.hooks-pending ]]; then
+        echo "Running the hooks that failed for $file.pem"
+    else
+        return
+    fi
+    # Marked until all of them have run, so that a failed one is retried
+    # with the next run, which may have no new certificate.
+    touch "$file.hooks-pending"
+    local failed=0
+    for hook in "$@"; do
+        if ! sh -c "$hook"; then
+            echo "Hook failed for $file: $hook" >&2
+            failed=1
+        fi
+    done
+    if ((failed)); then
+        status=1
+    else
+        rm -f "$file.hooks-pending"
+    fi
+}
+
+{% for cert in lego_certificates %}
+certificate {{ __lego_files[loop.index0] | quote }} {{ cert['domains'] | map('lower') | unique | sort | join(' ') | quote }} \
+{% for domain in cert['domains'] %}
+    --domains {{ domain | quote }} \
+{% endfor %}
+    -- \
+{% for hook in cert['hooks'] | default([]) %}
+    {{ hook | quote }} \
+{% endfor %}
+
+{% endfor %}
+exit "$status"

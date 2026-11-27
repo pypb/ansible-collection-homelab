@@ -37,6 +37,8 @@ migrated into `roles/`.
     they are loaded
   - `haproxy_geoip`: lists of countries' IP prefixes for HAProxy ACLs, from DB-IP,
     kept up to date by a timer, with optional seeds for a new host
+  - `lego`: certificates from Let's Encrypt or another ACME server with lego and
+    DNS-01, renewed by a timer, with hooks when one changes
   - `docker_traefik`: Traefik with Docker Compose, with its static and dynamic
     configuration, and rotation of its log files
   - `routeros_config`: MikroTik RouterOS configuration in numbered steps merged from

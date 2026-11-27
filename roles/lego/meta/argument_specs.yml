@@ -1,0 +1,74 @@
+---
+argument_specs:
+  main:
+    short_description: Certificates with lego and DNS-01, renewed by a timer.
+    description:
+      - Installs lego from the distribution and a script that issues each certificate that's missing or whose names changed, and renews the others.
+      - A systemd timer runs the script daily; a failure is retried hourly. When a certificate changes, its hooks run.
+      - New and changed certificates are issued while the role runs, so that what uses them can be set up after it.
+      - With O(lego_enabled=false), the timer, service, script and provider environment are removed, and O(lego_path) is kept.
+    author:
+      - pypb
+    options:
+      lego_enabled:
+        type: bool
+        default: false
+        description: Issue and renew the certificates. False removes the timer, service, script and provider environment, and keeps O(lego_path).
+      lego_email:
+        type: str
+        default: ""
+        description: The ACME account's address. Required when O(lego_enabled) is true.
+      lego_server:
+        type: str
+        default: https://acme-v02.api.letsencrypt.org/directory
+        description: The ACME directory.
+      lego_dns_provider:
+        type: str
+        default: ""
+        description: lego's DNS provider for DNS-01, such as C(desec) or C(rfc2136). Required when O(lego_enabled) is true.
+      lego_environment:
+        type: dict
+        default: {}
+        description:
+          - The provider's settings, as environment variables, such as C(DESEC_TOKEN). Also for lego's own, such as C(LEGO_CA_CERTIFICATES).
+          - Written to C(/etc/lego/environment), C(root) C(0600).
+      lego_dns_resolvers:
+        type: list
+        elements: str
+        default: []
+        description: Resolvers, as C(host:port), for lego's check that the TXT record is there. Empty uses the system's.
+      lego_certificates:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - The certificates. Each is written to C(<lego_path>/certificates/<first domain, with * as _>.pem).
+          - The C(.pem) has the key and the full chain in one file. They're also written as C(.crt) and C(.key).
+          - Certificates removed from the list are left there.
+        options:
+          domains:
+            type: list
+            elements: str
+            required: true
+            description: The names, optionally starting with C(*.). The first names the files, so no two certificates may start with the same one.
+          hooks:
+            type: list
+            elements: str
+            default: []
+            description: Shell commands to run, in order, when the certificate is issued or renewed.
+      lego_key_type:
+        type: str
+        default: ec256
+        description: lego's key type, such as C(ec256) or C(rsa2048).
+      lego_renew_days:
+        type: int
+        default: 30
+        description: Renew certificates that expire within this many days.
+      lego_path:
+        type: path
+        default: /var/lib/lego
+        description: lego's directory, with the account and the certificates.
+      lego_on_calendar:
+        type: str
+        default: daily
+        description: When to look for certificates to renew, as a systemd C(OnCalendar) expression. A random delay of up to an hour is added.

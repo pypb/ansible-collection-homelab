@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Issue and renew certificates with lego
+Wants=network-online.target
+After=network-online.target
+# Retry for as long as it fails.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart={{ __lego_script }}
+Restart=on-failure
+RestartSec=1h

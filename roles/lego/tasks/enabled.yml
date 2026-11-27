@@ -1,0 +1,102 @@
+---
+- name: Validate the settings
+  ansible.builtin.assert:
+    that:
+      - lego_email is string and lego_email | length > 0
+      - lego_dns_provider is string and lego_dns_provider is match('^[a-z0-9_.-]+$')
+      - lego_environment is mapping
+      - lego_environment.keys() | reject('match', '^[A-Za-z_][A-Za-z0-9_]*$') | length == 0
+      - lego_environment.values() | reject('string') | length == 0
+      - lego_dns_resolvers is sequence and lego_dns_resolvers is not string
+      - lego_certificates is sequence and lego_certificates is not string
+      - lego_certificates | rejectattr('domains', 'defined') | length == 0
+      - lego_certificates | map(attribute='domains') | reject('sequence') | length == 0
+      - lego_certificates | map(attribute='domains') | select('string') | length == 0
+      - lego_certificates | map(attribute='domains') | map('length') | select('==', 0) | length == 0
+      - lego_certificates | map(attribute='domains') | flatten | reject('match', '^(\*\.)?[A-Za-z0-9.-]+$') | length == 0
+      - lego_certificates | map(attribute='hooks', default=[]) | reject('sequence') | length == 0
+      - lego_certificates | map(attribute='hooks', default=[]) | select('string') | length == 0
+      - lego_certificates | map(attribute='hooks', default=[]) | flatten | reject('string') | length == 0
+      - __lego_files | unique | length == __lego_files | length
+      - lego_renew_days | int > 0
+    fail_msg: >-
+      lego_email and lego_dns_provider are required. lego_environment takes
+      variable names, with a string each. Each of lego_certificates needs a list
+      of domains, optionally starting with *., and may have a list of hooks, as
+      strings; no two may start with the same domain. lego_renew_days must be a
+      positive number.
+    quiet: true
+
+# openssl reads the names on a certificate, to issue it again when they change.
+- name: Install lego
+  ansible.builtin.apt:
+    name: [lego, openssl, ca-certificates]
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ __lego_environment_file | dirname }}"
+    - "{{ lego_path }}"
+
+- name: Write the DNS provider's environment
+  ansible.builtin.template:
+    src: environment.j2
+    dest: "{{ __lego_environment_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  # It holds the provider's credentials, which a diff would show.
+  no_log: true
+
+- name: Install the script
+  ansible.builtin.template:
+    src: lego-certificates.j2
+    dest: "{{ __lego_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: __lego_script_written
+
+- name: Find the certificates
+  ansible.builtin.stat:
+    path: "{{ item }}.pem"
+  loop: "{{ __lego_files }}"
+  register: __lego_present
+
+# So that a new certificate exists before what uses it is set up, and a
+# changed one is issued now. The timer renews them.
+- name: Issue the new or changed certificates
+  ansible.builtin.command:
+    argv: ["{{ __lego_script }}"]
+  register: __lego_run
+  changed_when: __lego_run['stdout'] is search('^New certificate', multiline=true)
+  when:
+    - not ansible_check_mode
+    - __lego_script_written is changed
+      or __lego_present['results'] | rejectattr('stat.exists') | list | length > 0
+
+- name: Write the service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ __lego_units }}"
+  register: __lego_units_written
+
+- name: Start the timer
+  ansible.builtin.systemd_service:
+    name: lego-certificates.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ __lego_units_written is changed }}"
+  # In check mode, the timer may not be written yet.
+  when: not (ansible_check_mode and __lego_units_written is changed)

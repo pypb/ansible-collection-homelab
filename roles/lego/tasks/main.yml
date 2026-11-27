@@ -1,0 +1,8 @@
+---
+- name: Issue and renew the certificates
+  ansible.builtin.include_tasks: enabled.yml
+  when: lego_enabled | bool
+
+- name: Remove the timer, the script and the provider's environment
+  ansible.builtin.include_tasks: disabled.yml
+  when: not lego_enabled | bool
