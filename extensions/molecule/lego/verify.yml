@@ -15,22 +15,22 @@
           openssl x509 -in {{ __molecule_dir }}/{{ item }}.crt -noout -ext subjectAltName
           | grep -o 'DNS:[^,]*' | sort | paste -sd' ' -
         executable: /bin/bash
-      loop: [_.example.test, app.example.test]
+      loop: ["_.{{ __molecule_domain }}", "app.{{ __molecule_domain }}"]
       register: __molecule_names
       changed_when: false
 
     - name: Check the names
       ansible.builtin.assert:
         that:
-          - __molecule_names['results'][0]['stdout'] == 'DNS:*.example.test DNS:example.test'
-          - __molecule_names['results'][1]['stdout'] == 'DNS:app.example.test'
+          - __molecule_names['results'][0]['stdout'] == 'DNS:*.' ~ __molecule_domain ~ ' DNS:' ~ __molecule_domain
+          - __molecule_names['results'][1]['stdout'] == 'DNS:app.' ~ __molecule_domain
 
     - name: Check that the .pem has the key and the certificate, and that they match
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
-          test "$(openssl pkey -in {{ __molecule_dir }}/_.example.test.pem -pubout)"
-          = "$(openssl x509 -in {{ __molecule_dir }}/_.example.test.pem -noout -pubkey)"
+          test "$(openssl pkey -in {{ __molecule_dir }}/_.{{ __molecule_domain }}.pem -pubout)"
+          = "$(openssl x509 -in {{ __molecule_dir }}/_.{{ __molecule_domain }}.pem -noout -pubkey)"
         executable: /bin/bash
       changed_when: false
 
@@ -67,17 +67,17 @@
         name: pypb.homelab.lego
       vars:
         lego_certificates:
-          - domains: ["*.example.test", example.test]
+          - domains: ["*.{{ __molecule_domain }}", "{{ __molecule_domain }}"]
             hooks:
               - touch /root/hook-wildcard
               - echo ran >> /root/hook-wildcard-count
-          - domains: [app.example.test, www.example.test]
+          - domains: ["app.{{ __molecule_domain }}", "www.{{ __molecule_domain }}"]
 
     - name: Read the names on the changed certificate
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
-          openssl x509 -in {{ __molecule_dir }}/app.example.test.crt -noout -ext subjectAltName
+          openssl x509 -in {{ __molecule_dir }}/app.{{ __molecule_domain }}.crt -noout -ext subjectAltName
           | grep -o 'DNS:[^,]*' | sort | paste -sd' ' -
         executable: /bin/bash
       register: __molecule_changed
@@ -86,7 +86,7 @@
     - name: Check that it was issued again with both names
       ansible.builtin.assert:
         that:
-          - __molecule_changed['stdout'] == 'DNS:app.example.test DNS:www.example.test'
+          - __molecule_changed['stdout'] == 'DNS:app.' ~ __molecule_domain ~ ' DNS:www.' ~ __molecule_domain
 
     - name: Read the hook's count after the change
       ansible.builtin.slurp:
@@ -111,7 +111,7 @@
         - /etc/lego
         - /etc/systemd/system/lego-certificates.timer
         - /etc/systemd/system/lego-certificates.service
-        - "{{ __molecule_dir }}/_.example.test.pem"
+        - "{{ __molecule_dir }}/_.{{ __molecule_domain }}.pem"
       register: __molecule_after_disable
 
     - name: Check that the script, environment and units are gone, and the certificates kept

@@ -10,9 +10,13 @@ lego_environment:
   RFC2136_TSIG_SECRET: "{{ __molecule_tsig_secret }}"
   RFC2136_TSIG_ALGORITHM: hmac-sha256.
   LEGO_CA_CERTIFICATES: "{{ __molecule_root_ca_path }}"
+# Each target has its own names: lego's rfc2136 provider replaces the TXT
+# records of a name, so targets with the same names would remove each
+# other's challenges.
+__molecule_domain: "{{ inventory_hostname }}.example.test"
 lego_certificates:
-  - domains: ["*.example.test", example.test]
+  - domains: ["*.{{ __molecule_domain }}", "{{ __molecule_domain }}"]
     hooks:
       - touch /root/hook-wildcard
       - echo ran >> /root/hook-wildcard-count
-  - domains: [app.example.test]
+  - domains: ["app.{{ __molecule_domain }}"]
