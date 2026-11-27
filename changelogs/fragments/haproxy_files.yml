@@ -1,0 +1,6 @@
+---
+minor_changes:
+  - haproxy - add haproxy_files, files in /etc/haproxy that sections refer to,
+    such as a ca-file of client certificates. They're written before the
+    configuration is checked, and a change to one alone is checked before
+    HAProxy reloads.

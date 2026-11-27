@@ -16,6 +16,16 @@
       ansible.builtin.assert:
         that: __molecule_page['content'] == 'hello from the backend'
 
+    - name: Request a page that HAProxy reads from a file in haproxy_files
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/file
+        return_content: true
+      register: __molecule_file_page
+
+    - name: Check the file was served
+      ansible.builtin.assert:
+        that: __molecule_file_page['content'] == 'hello from a file'
+
     - name: Read whether HAProxy starts at boot
       ansible.builtin.command:
         argv: [systemctl, is-enabled, haproxy]

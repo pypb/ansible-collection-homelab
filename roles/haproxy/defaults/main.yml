@@ -29,3 +29,9 @@ haproxy_defaults: |
 haproxy_frontends: {}
 haproxy_backends: {}
 haproxy_listens: {}
+
+# Files that sections refer to, such as a ca-file of client certificates or a
+# map, as a dict of file name and content. They're written to /etc/haproxy,
+# root:root 0640, before the configuration is checked. An entry removed
+# here leaves its file behind.
+haproxy_files: {}

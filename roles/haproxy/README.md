@@ -4,6 +4,8 @@ Sets up HAProxy:
 
 - Installs HAProxy and writes `/etc/haproxy/haproxy.cfg`: the global and
   defaults sections, then the frontends, backends and listen sections.
+- Writes the files the sections refer to, such as a `ca-file` or a map, to
+  `/etc/haproxy`.
 - Checks the configuration with `haproxy -c` before writing it, so a broken one
   never replaces the running one.
 - Reloads HAProxy after a change, which keeps established connections, and
@@ -29,11 +31,18 @@ Each section is given as its lines, as in HAProxy's own configuration.
 | `haproxy_frontends` | `{}` | Frontends, as a dict of name and lines |
 | `haproxy_backends` | `{}` | Backends, as a dict of name and lines |
 | `haproxy_listens` | `{}` | Listen sections, as a dict of name and lines |
+| `haproxy_files` | `{}` | Files in `/etc/haproxy` (`root:root`, `0640`), as a dict of file name and content |
 
 Replacing `haproxy_global` drops the default logging and stats socket. Keep
 `expose-fd listeners` on the stats socket, so that reloads keep the listening
 sockets. Section names must be unique across frontends, backends and listen
 sections.
+
+`haproxy_files` is for what a section reads from a file, such as the client
+certificates in `ca-file`. The names have no directories, and `haproxy.cfg`
+isn't allowed. When a file changes and the configuration doesn't, the
+configuration is checked again before HAProxy reloads. Removing an entry leaves
+its file behind; remove the section's reference to it as well.
 
 ## Example playbook
 
@@ -69,8 +78,10 @@ sections.
 - **Idempotent:** yes.
 - **Atomic:** yes. The configuration is checked before it's written.
 - **Check mode:** yes. The configuration isn't checked with `haproxy -c`.
-- **Applied right away:** HAProxy reloads when the configuration changes.
-- **Replaced files:** `/etc/haproxy/haproxy.cfg`.
+- **Applied right away:** HAProxy reloads when the configuration or a file
+  changes.
+- **Replaced files:** `/etc/haproxy/haproxy.cfg`, and the files in
+  `haproxy_files`.
 - **Rollback:** none needed, since a broken configuration is never written.
 
 ## License
