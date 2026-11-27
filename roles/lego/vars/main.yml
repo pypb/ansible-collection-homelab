@@ -1,0 +1,13 @@
+---
+__lego_script: /usr/local/sbin/lego-certificates
+__lego_environment_file: /etc/lego/environment
+
+__lego_units:
+  - lego-certificates.service
+  - lego-certificates.timer
+
+# The file a certificate is written to, by lego's naming, without the
+# extension: <lego_path>/certificates/<first domain, with * as _>.
+__lego_files: >-
+  {{ lego_certificates | map(attribute='domains') | map('first') | map('lower')
+     | map('replace', '*', '_') | map('regex_replace', '^', lego_path ~ '/certificates/') | list }}

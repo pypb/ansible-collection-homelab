@@ -1,0 +1,6 @@
+$TTL 60
+@   IN SOA ns.example.test. hostmaster.example.test. 1 60 60 3600 60
+    IN NS  ns.example.test.
+; lego checks the TXT records on the zone's name servers, so this one must be
+; the test DNS server's address.
+ns  IN A   10.199.78.53

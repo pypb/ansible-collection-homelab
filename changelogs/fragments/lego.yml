@@ -1,0 +1,8 @@
+---
+minor_changes:
+  - lego - new role for certificates from Let's Encrypt, or another ACME
+    server, with lego and DNS-01, including wildcards. A systemd timer renews
+    them and runs each certificate's hooks when it changes. New and changed
+    certificates are issued while the role runs.
+  - site - lego is set up in the services phase, before HAProxy, where
+    site_lego is true.

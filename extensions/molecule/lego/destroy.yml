@@ -1,0 +1,19 @@
+---
+- name: Destroy test environment
+  hosts: molecule-host
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+  tasks:
+    - name: Remove containers
+      ansible.builtin.command:
+        argv: "{{ ['docker', 'rm', '--force'] + __molecule_platforms | map(attribute='name') + [__molecule_ca, __molecule_dns] }}"
+      register: __molecule_rm
+      changed_when: true
+      # Docker fails for containers that don't exist, even with --force.
+      failed_when: __molecule_rm['rc'] != 0 and __molecule_rm['stderr'] is not search('[Nn]o such container')
+
+    - name: Remove network
+      ansible.builtin.command:
+        argv: [docker, network, rm, --force, "{{ __molecule_network }}"]
+      changed_when: true

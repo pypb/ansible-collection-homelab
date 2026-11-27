@@ -1,0 +1,22 @@
+---
+lego_enabled: true
+lego_email: molecule@example.test
+lego_server: https://{{ __molecule_ca }}:9000/acme/acme/directory
+lego_dns_provider: rfc2136
+lego_dns_resolvers: ["{{ __molecule_dns_ip }}:53"]
+lego_environment:
+  RFC2136_NAMESERVER: "{{ __molecule_dns_ip }}:53"
+  RFC2136_TSIG_KEY: "{{ __molecule_tsig_name }}"
+  RFC2136_TSIG_SECRET: "{{ __molecule_tsig_secret }}"
+  RFC2136_TSIG_ALGORITHM: hmac-sha256.
+  LEGO_CA_CERTIFICATES: "{{ __molecule_root_ca_path }}"
+# Each target has its own names: lego's rfc2136 provider replaces the TXT
+# records of a name, so targets with the same names would remove each
+# other's challenges.
+__molecule_domain: "{{ inventory_hostname }}.example.test"
+lego_certificates:
+  - domains: ["*.{{ __molecule_domain }}", "{{ __molecule_domain }}"]
+    hooks:
+      - touch /root/hook-wildcard
+      - echo ran >> /root/hook-wildcard-count
+  - domains: ["app.{{ __molecule_domain }}"]

@@ -171,6 +171,18 @@
         - docker
       when: site_docker | default(false) | bool
 
+    # Before HAProxy, whose configuration can refer to the certificates and
+    # isn't valid until they exist.
+    - name: Set up lego
+      ansible.builtin.include_role:
+        name: pypb.homelab.lego
+        apply:
+          tags:
+            - lego
+      tags:
+        - lego
+      when: site_lego | default(false) | bool
+
     # Before HAProxy, whose configuration can refer to the lists and isn't
     # valid until they exist.
     - name: Set up HAProxy's country lists

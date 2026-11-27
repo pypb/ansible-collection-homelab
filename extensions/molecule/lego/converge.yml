@@ -1,0 +1,11 @@
+---
+- name: Converge
+  hosts: targets
+  gather_facts: false
+  vars_files:
+    - vars/environment.yml
+    - vars/role.yml
+  tasks:
+    - name: Issue the certificates
+      ansible.builtin.include_role:
+        name: pypb.homelab.lego
